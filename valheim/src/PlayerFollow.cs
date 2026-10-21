@@ -13,9 +13,40 @@ namespace ValOutcast
         private static readonly AccessTools.FieldRef<Character, Rigidbody> BodyRef =
             AccessTools.FieldRefAccess<Character, Rigidbody>("m_body");
 
+        private const float TeleportMeters = 10f;
+
         private static bool _anchored;
+        private static bool _hasLast;
+        private static Vector3 _lastWire;
         private static Vector3 _anchorWire;
         private static Vector3 _anchorWorld;
+
+        /// <summary>True once the first position has been matched to the Valheim player.</summary>
+        public static bool Anchored => _anchored;
+
+        /// <summary>Goes up by one every time the mapping between the two games changes.</summary>
+        public static int AnchorGeneration { get; private set; }
+
+        /// <summary>Valheim world position to the player side's wire coordinates (meters, Y up, -Z forward).</summary>
+        public static Vector3 WorldToWire(Vector3 world)
+        {
+            Vector3 u = _anchorWire + (world - _anchorWorld);
+            return new Vector3(u.x, u.y, -u.z);
+        }
+
+        /// <summary>Wire X and Z of a point to the Valheim world X and Z (Y is left at 0).</summary>
+        public static Vector3 WireToWorldXZ(float wireX, float wireZ)
+        {
+            Vector3 u = new Vector3(wireX, 0f, -wireZ);
+            Vector3 w = _anchorWorld + (u - _anchorWire);
+            return new Vector3(w.x, 0f, w.z);
+        }
+
+        /// <summary>Valheim height to wire height.</summary>
+        public static float WorldYToWireY(float worldY)
+        {
+            return _anchorWire.y + (worldY - _anchorWorld.y);
+        }
 
         /// <summary>True while another game is driving the player.</summary>
         public static bool Active => Plugin.Link != null && Plugin.Link.PlayerStateFresh;
@@ -31,15 +62,29 @@ namespace ValOutcast
             if (!Active)
             {
                 _anchored = false;
+                _hasLast = false;
                 return;
             }
             var link = Plugin.Link;
             Vector3 wirePos = WireToUnity(link.StatePos);
+            if (_hasLast && (wirePos - _lastWire).magnitude > TeleportMeters)
+            {
+                _anchored = false; // the other game teleported its player: stay put and re-anchor
+            }
+            _hasLast = true;
+            _lastWire = wirePos;
             if (!_anchored)
             {
                 _anchored = true;
                 _anchorWire = wirePos;
                 _anchorWorld = player.transform.position;
+                // Anchor to the real ground under the Valheim player, not to wherever the body is right now
+                // (it may be falling in or standing on something). The other game's feet then start on the ground.
+                if (ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(_anchorWorld, out float groundY))
+                {
+                    _anchorWorld.y = groundY;
+                }
+                AnchorGeneration++;
             }
 
             Vector3 target = _anchorWorld + (wirePos - _anchorWire);

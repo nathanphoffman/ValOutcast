@@ -14,6 +14,12 @@ namespace ValOutcast
         public const byte MsgHeartbeat = 2;
         public const byte MsgPlayerState = 3;
         public const int PlayerStateTimeoutMs = 500;
+        public const byte MsgCollisionSection = 4;
+        public const byte MsgCollisionReset = 5;
+        public const int ChunkCells = 16;
+        public const float CellSizeM = 0.5f;
+        public const int HeightUnitsPerM = 32;
+        public const short NoHeight = short.MinValue;
         public const byte RoleWorld = 0;
         public const byte RolePlayer = 1;
         public const int PortWorld = 47100;
@@ -81,6 +87,38 @@ namespace ValOutcast
                 BitConverter.GetBytes(look[i]).CopyTo(b, 20 + 4 * i);
             }
             return b;
+        }
+
+        public static byte[] EncodeCollisionSection(uint seq, int cx, int cz, short[] heights)
+        {
+            var b = new byte[16 + 512];
+            WriteHeader(b, MsgCollisionSection, seq);
+            BitConverter.GetBytes(cx).CopyTo(b, 8);
+            BitConverter.GetBytes(cz).CopyTo(b, 12);
+            for (int i = 0; i < ChunkCells * ChunkCells; i++)
+                BitConverter.GetBytes(heights[i]).CopyTo(b, 16 + 2 * i);
+            return b;
+        }
+
+        public static byte[] EncodeCollisionReset(uint seq)
+        {
+            var b = new byte[HeaderSize];
+            WriteHeader(b, MsgCollisionReset, seq);
+            return b;
+        }
+
+        /// <summary>Sends one terrain chunk (256 heights). Does nothing if not connected.</summary>
+        public void SendCollisionSection(int cx, int cz, short[] heights)
+        {
+            if (!Connected) return;
+            Send(EncodeCollisionSection(++_seq, cx, cz, heights), _clock.ElapsedMilliseconds);
+        }
+
+        /// <summary>Tells the player side to forget all chunks. Does nothing if not connected.</summary>
+        public void SendCollisionReset()
+        {
+            if (!Connected) return;
+            Send(EncodeCollisionReset(++_seq), _clock.ElapsedMilliseconds);
         }
 
         /// <summary>Reads the 24-byte payload that starts at offset 8.</summary>

@@ -9,6 +9,7 @@ namespace ValOutcast
     {
         public static VoLink Link;
         private Harmony _harmony;
+        private readonly TerrainStreamer _streamer = new TerrainStreamer();
 
         private void Awake()
         {
@@ -30,6 +31,7 @@ namespace ValOutcast
         private void Update()
         {
             Link?.Tick();
+            _streamer.Update(Link);
         }
 
         private void OnDestroy()

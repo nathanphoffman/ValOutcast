@@ -84,6 +84,28 @@ void vo_decode_player_state(const uint8_t *payload, float pos[3], float look[3])
 	}
 }
 
+int vo_encode_collision_section(uint8_t *out, uint32_t seq, int32_t cx, int32_t cz, const int16_t *heights)
+{
+	int i;
+	put_header(out, VO_MSG_COLLISION_SECTION, seq);
+	put_u32(out + 8, (uint32_t)cx);
+	put_u32(out + 12, (uint32_t)cz);
+	for (i = 0; i < VO_CHUNK_CELLS * VO_CHUNK_CELLS; i++)
+		put_u16(out + 16 + 2 * i, (uint16_t)heights[i]);
+	return 16 + 512;
+}
+
+int vo_decode_collision_section(const uint8_t *payload, int len, int32_t *cx, int32_t *cz, int16_t *heights)
+{
+	int i;
+	if (len < 8 + 512) return -1;
+	*cx = (int32_t)get_u32(payload);
+	*cz = (int32_t)get_u32(payload + 4);
+	for (i = 0; i < VO_CHUNK_CELLS * VO_CHUNK_CELLS; i++)
+		heights[i] = (int16_t)(payload[8 + 2 * i] | (payload[9 + 2 * i] << 8));
+	return 0;
+}
+
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out)
 {
 	if (len < VO_HEADER_SIZE) return -1;
@@ -164,6 +186,8 @@ void vo_link_tick(vo_link *link)
 		type = vo_decode(buf, n, NULL);
 		if (type < 0) continue;
 		link->last_recv_ms = now;
+		if (type != VO_MSG_HELLO && type != VO_MSG_HEARTBEAT && link->on_message)
+			link->on_message(link->user, type, buf + VO_HEADER_SIZE, n - VO_HEADER_SIZE);
 		if (!link->connected) {
 			link->connected = 1;
 			if (link->log) link->log("connected");

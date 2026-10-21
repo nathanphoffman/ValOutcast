@@ -64,6 +64,11 @@ Each phase ends with something you can run and check. Don't start the next one u
 - **Done when:** walking in Outcast moves the Valheim character the same way.
 
 ### Phase 3: Terrain collision (hardest)
+**Status:** built, tests pass, not yet tried in the real games.
+- Valheim samples ground height (and "something is in the way" for trees, rocks, buildings) on a 0.5 m grid around the player and streams it as 8 m chunks (`CollisionSection`). See `protocol/PROTOCOL.md`.
+- Outcast keeps the chunks (`outcast/src/vo_field.cpp`, unit tested with `tools/test_field.sh`) and wraps the player's movement trace (`VO_PlayerTrace`). Over Valheim ground, the level's own walls and floors are ignored.
+- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), objects are just tall columns (no climbing on them), ground is cut into 0.5 m steps.
+- Test without Valheim: `tools/fake_world.py` makes flat ground inside a 6 m ring wall.
 - Valheim sends ground and object shapes near the player in chunks.
 - Outcast adds them to its collision checks and drops far-away chunks.
 - **Done when:** you can walk on Valheim hills and bump into trees and buildings from the Outcast side.

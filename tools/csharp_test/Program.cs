@@ -22,6 +22,14 @@ class Program
         var rp = new float[3]; var rl = new float[3];
         VoLink.DecodePlayerState(state, rp, rl);
         Check(rp[0] == 1 && rp[1] == 2 && rp[2] == 3 && rl[2] == -1, "decode player state");
+        var hs = new short[256];
+        for (int i = 0; i < 256; i++) hs[i] = (short)(i * 100 - 12000);
+        hs[0] = VoLink.NoHeight;
+        var cs = VoLink.EncodeCollisionSection(4, -1, 2, hs);
+        Check(cs.Length == 528, "collision size");
+        Check(cs.AsSpan(0, 16).SequenceEqual(new byte[] { 0x56, 0x4F, 1, 4, 4, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 2, 0, 0, 0 }), "collision header bytes");
+        Check(BitConverter.ToInt16(cs, 16) == -32768 && BitConverter.ToInt16(cs, 16 + 510) == 255 * 100 - 12000, "collision heights");
+        Check(VoLink.EncodeCollisionReset(5).AsSpan().SequenceEqual(new byte[] { 0x56, 0x4F, 1, 5, 5, 0, 0, 0 }), "reset bytes");
         Check(VoLink.Decode(hello, 16, out uint seq) == VoLink.MsgHello && seq == 1, "decode hello");
         Check(VoLink.Decode(hello, 4, out _) == -1, "decode short");
 

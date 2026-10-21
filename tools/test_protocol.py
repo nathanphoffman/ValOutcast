@@ -15,6 +15,13 @@ assert vo.encode_heartbeat(2, 5000) == HEARTBEAT
 STATE = bytes.fromhex("564F010303000000" "0000803F" "00000040" "00004040" "00000000" "00000000" "000080BF")
 assert vo.encode_player_state(3, (1, 2, 3), (0, 0, -1)) == STATE
 assert vo.decode_player_state(STATE[8:]) == ((1.0, 2.0, 3.0), (0.0, 0.0, -1.0))
+heights = [i * 100 - 12000 for i in range(256)]
+heights[0] = vo.NO_HEIGHT
+sec = vo.encode_collision_section(4, -1, 2, heights)
+assert len(sec) == 528 and sec[:16] == bytes.fromhex("564F0104" "04000000" "FFFFFFFF" "02000000")
+assert vo.decode_collision_section(sec[8:]) == (-1, 2, heights)
+assert vo.decode_collision_section(sec[8:100]) is None
+assert vo.encode_collision_reset(5) == bytes.fromhex("564F0105" "05000000")
 assert vo.decode(HELLO)[:2] == (vo.MSG_HELLO, 1)
 assert vo.decode(b"\x00\x01") is None
 assert vo.decode(b"XX" + HELLO[2:]) is None

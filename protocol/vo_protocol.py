@@ -9,6 +9,12 @@ VERSION = 1
 MSG_HELLO = 1
 MSG_HEARTBEAT = 2
 MSG_PLAYER_STATE = 3
+MSG_COLLISION_SECTION = 4
+MSG_COLLISION_RESET = 5
+CHUNK_CELLS = 16
+CELL_SIZE_M = 0.5
+HEIGHT_UNITS_PER_M = 32
+NO_HEIGHT = -32768
 PLAYER_STATE_TIMEOUT_MS = 500
 ROLE_WORLD = 0
 ROLE_PLAYER = 1
@@ -37,6 +43,23 @@ def decode_player_state(payload):
         return None
     v = struct.unpack_from("<6f", payload)
     return v[:3], v[3:]
+
+
+def encode_collision_section(seq, cx, cz, heights):
+    assert len(heights) == CHUNK_CELLS * CHUNK_CELLS
+    return _HEADER.pack(MAGIC, VERSION, MSG_COLLISION_SECTION, seq) + struct.pack("<ii256h", cx, cz, *heights)
+
+
+def decode_collision_section(payload):
+    """Return (cx, cz, heights) or None if the payload is too short."""
+    if len(payload) < 8 + 512:
+        return None
+    cx, cz = struct.unpack_from("<ii", payload)
+    return cx, cz, list(struct.unpack_from("<256h", payload, 8))
+
+
+def encode_collision_reset(seq):
+    return _HEADER.pack(MAGIC, VERSION, MSG_COLLISION_RESET, seq)
 
 
 def decode(data):
@@ -84,6 +107,18 @@ class Link:
             return
         self.seq += 1
         self.sock.sendto(encode_player_state(self.seq, pos, look), self.peer)
+
+    def send_collision_section(self, cx, cz, heights):
+        if not self.connected:
+            return
+        self.seq += 1
+        self.sock.sendto(encode_collision_section(self.seq, cx, cz, heights), self.peer)
+
+    def send_collision_reset(self):
+        if not self.connected:
+            return
+        self.seq += 1
+        self.sock.sendto(encode_collision_reset(self.seq), self.peer)
 
     def tick(self):
         now = _now_ms()

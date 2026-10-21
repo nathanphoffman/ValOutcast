@@ -32,6 +32,19 @@ int main(int argc, char **argv)
 	check(vo_encode_player_state(out, 3, spos, slook) == 32 && memcmp(out, state, 32) == 0, "player state bytes");
 	vo_decode_player_state(state + 8, rpos, rlook);
 	check(rpos[0] == 1 && rpos[1] == 2 && rpos[2] == 3 && rlook[2] == -1, "decode player state");
+	{
+		int16_t h[256], h2[256];
+		uint8_t big[528];
+		int32_t cx, cz;
+		static const uint8_t head[16] = {0x56,0x4F,1,4, 4,0,0,0, 0xFF,0xFF,0xFF,0xFF, 2,0,0,0};
+		for (i = 0; i < 256; i++) h[i] = (int16_t)(i * 100 - 12000);
+		h[0] = VO_NO_HEIGHT;
+		check(vo_encode_collision_section(big, 4, -1, 2, h) == 528, "collision size");
+		check(memcmp(big, head, 16) == 0, "collision header bytes");
+		check(vo_decode_collision_section(big + 8, 520, &cx, &cz, h2) == 0 && cx == -1 && cz == 2, "collision decode");
+		check(memcmp(h, h2, sizeof(h)) == 0 && h2[0] == -32768 && h2[255] == 255 * 100 - 12000, "collision heights");
+		check(vo_decode_collision_section(big + 8, 100, &cx, &cz, h2) == -1, "collision short");
+	}
 	check(vo_decode(hello, 16, &seq) == VO_MSG_HELLO && seq == 1, "decode hello");
 	check(vo_decode(hello, 4, NULL) == -1, "decode short");
 

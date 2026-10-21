@@ -28,7 +28,23 @@ Packets with the wrong magic or version, or too short, are dropped silently.
 |---|---|---|
 | 1 | Hello | u8 role, 3 bytes zero, u32 pid (8 bytes) |
 | 2 | Heartbeat | u32 uptime in milliseconds (4 bytes) |
-| 3 | PlayerState | 6 x f32: position x y z (meters), look direction x y z (unit vector). 24 bytes. Player side to world side. |
+| 3 | PlayerState | 6 x f32: position x y z (meters), look direction x y z (unit vector). 24 bytes. Player side to world side. Position is the **feet** (bottom center of the player). |
+| 4 | CollisionSection | i32 chunkX, i32 chunkZ, then 256 x i16 heights (row by row, 16 rows of 16). 520 bytes. World side to player side. |
+| 5 | CollisionReset | no payload. World side to player side: forget all collision chunks (the coordinate mapping changed). |
+
+### Teleports
+
+If PlayerState jumps more than 10 m between two updates, the world side treats it as a teleport on the player side: it keeps its own player where it is, re-anchors to the new position, and sends CollisionReset followed by a fresh field. The same happens after PlayerState stops arriving for 500 ms.
+
+### Collision field
+
+The ground is a grid of vertical columns. A column is solid from far below up to its height.
+
+- Cell size: 0.5 m. A chunk is 16 x 16 cells (8 m x 8 m). Chunk (cx, cz) covers wire X from cx*8 to cx*8+8 and wire Z from cz*8 to cz*8+8.
+- Heights are i16 in 1/32 m (Y, same space as PlayerState positions). The value -32768 means "no data here" (no column).
+- Row index runs along Z, column index along X: `heights[iz * 16 + ix]`.
+- The world side expresses the field in the **player side's** coordinate space, so the player side can use it as is.
+- The player side drops chunks that are far away. The world side resends chunks now and then, so a lost packet is repaired.
 
 ### Coordinates on the wire
 
