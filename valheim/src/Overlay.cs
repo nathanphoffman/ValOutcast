@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using UnityEngine;
 
 namespace ValOutcast
@@ -12,6 +14,7 @@ namespace ValOutcast
     {
         private const string Path = "/dev/shm/valoutcast_frame";
         private const float StaleSeconds = 1f;
+        private const double WaitMs = 25;   // longest wait for Outcast's picture before carrying on without it
 
         private readonly FrameReader _reader = new FrameReader(Path);
         private byte[] _pixels;
@@ -19,6 +22,7 @@ namespace ValOutcast
         private float _lastChange;
         private bool _show;
         private bool _loggedFirst;
+        private bool _late;   // the last picture did not arrive in time: the next one to arrive belongs to an old request
         private readonly Action<string> _log;
 
         public Overlay(Action<string> log)
@@ -33,13 +37,32 @@ namespace ValOutcast
             if (!PlayerFollow.Active || Player.m_localPlayer == null || Menu.IsVisible())
             {
                 _show = false;
+                PlayerFollow.Lockstep = false;
                 return;
             }
 
             try
             {
                 _reader.RequestFrame(); // one picture per Valheim frame, so the two games' frames keep step
-                if (_reader.TryRead(ref _pixels, out int width, out int height))
+                // Wait for that picture (Outcast makes it in a few milliseconds), so it is shown in the same frame it was asked for.
+                bool got = false;
+                int width = 0, height = 0;
+                long start = Stopwatch.GetTimestamp();
+                while (true)
+                {
+                    got = _reader.TryRead(ref _pixels, out width, out height);
+                    if (got && _late)
+                    {
+                        _late = false; // an old picture that arrived late: skip it and wait for the one for this frame
+                        got = false;
+                    }
+                    if (got) break;
+                    if ((Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency > WaitMs) break;
+                    Thread.Sleep(0);
+                }
+                PlayerFollow.Lockstep = got;
+                if (!got && _lastChange > 0f) _late = true;
+                if (got)
                 {
                     if (_texture == null || _texture.width != width || _texture.height != height)
                     {

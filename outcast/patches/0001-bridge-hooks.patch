@@ -57,6 +57,76 @@ index f2990bb..18e9a19 100644
  	if ( ++recursive > 2 ) {
  		Com_Error( ERR_FATAL, "SCR_UpdateScreen: recursively called" );
  	}
+diff --git a/code/qcommon/common.cpp b/code/qcommon/common.cpp
+index aeaff24..6f4aad9 100644
+--- a/code/qcommon/common.cpp
++++ b/code/qcommon/common.cpp
+@@ -37,6 +37,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ 
+ // Because renderer.
+ #include "../rd-common/tr_public.h"
++#include <stdlib.h>
++#include <time.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/mman.h>
+ extern refexport_t re;
+ 
+ static fileHandle_t	logfile;
+@@ -1383,6 +1388,37 @@ void G2Time_ResetTimers(void);
+ void G2Time_ReportTimers(void);
+ #endif
+ 
++// ValOutcast overlay mode (VO_OVERLAY set): once Valheim asks for pictures (see cl_scrn.cpp), each loop below waits for
++// the next request instead of a timer, so a picture is made as soon as it is asked for. Gives up after a while so the
++// game keeps running if Valheim stops asking. Returns true if a request arrived.
++static bool VO_WaitForPictureRequest( void ) {
++	static int overlay = -1;
++	static const volatile unsigned int *header = NULL;
++	static unsigned int lastSeen = 0;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	if ( overlay != 1 ) return false;
++	if ( !header ) {
++		const int fd = open( "/dev/shm/valoutcast_frame", O_RDONLY );
++		if ( fd < 0 ) return false;
++		void *map = mmap( NULL, 32, PROT_READ, MAP_SHARED, fd, 0 );
++		close( fd );
++		if ( map == MAP_FAILED ) return false;
++		header = (const volatile unsigned int *)map;
++	}
++	if ( __atomic_load_n( &header[5], __ATOMIC_ACQUIRE ) == 0 ) return false;	// byte 20: nobody is asking
++	const int start = Sys_Milliseconds();
++	for ( ;; ) {
++		const unsigned int requested = __atomic_load_n( &header[5], __ATOMIC_ACQUIRE );
++		if ( requested != lastSeen ) {
++			lastSeen = requested;
++			return true;
++		}
++		if ( Sys_Milliseconds() - start >= 50 ) return false;
++		struct timespec ts = { 0, 100000 };	// 0.1 ms
++		nanosleep( &ts, NULL );
++	}
++}
++
+ void Com_Frame( void ) {
+ 	try
+ 	{
+@@ -1421,6 +1457,7 @@ void Com_Frame( void ) {
+ 		// that framerate is stable at the requested value.
+ 		minMsec -= bias;
+ 
++		if ( !VO_WaitForPictureRequest() ) {
+ 		timeVal = Com_TimeVal(minMsec);
+ 		do {
+ 			// Busy sleep the last millisecond for better timeout precision
+@@ -1429,6 +1466,7 @@ void Com_Frame( void ) {
+ 			else
+ 				Sys_Sleep(timeVal - 1);
+ 		} while( (timeVal = Com_TimeVal(minMsec)) != 0 );
++		}
+ 		IN_Frame();
+ 
+ 		lastTime = com_frameTime;
 diff --git a/code/rd-vanilla/CMakeLists.txt b/code/rd-vanilla/CMakeLists.txt
 index 6c24eb2..4461793 100644
 --- a/code/rd-vanilla/CMakeLists.txt

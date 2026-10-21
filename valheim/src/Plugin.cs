@@ -75,11 +75,14 @@ namespace ValOutcast
         private void Update()
         {
             Link?.Tick();
+            // Order matters for the 1:1 frame sync: send this frame's input, ask Outcast for the picture and wait for it,
+            // then read the position Outcast sent while making it, so the picture and the camera come from the same Outcast frame.
+            Run(ref _inputOk, "input", () => _input.Update(Link));
+            Run(ref _overlayOk, "overlay", () => _overlay.Update());
+            Link?.Tick();
             Run(ref _followOk, "follow", () => PlayerFollow.Tick(Player.m_localPlayer));
             Run(ref _streamerOk, "terrain", () => _streamer.Update(Link));
             Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
-            Run(ref _inputOk, "input", () => _input.Update(Link));
-            Run(ref _overlayOk, "overlay", () => _overlay.Update());
             Run(ref _lightOk, "light", () => _light.Update(Link));
             Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && Player.m_localPlayer != null));
             _perf.EndFrame(PlayerFollow.Active);

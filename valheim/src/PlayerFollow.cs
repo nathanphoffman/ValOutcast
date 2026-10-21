@@ -36,6 +36,12 @@ namespace ValOutcast
         private static Vector3 _currentLook = Vector3.forward;
         private static bool _hidden;
 
+        /// <summary>
+        /// True while every Valheim frame gets its own Outcast frame (see Overlay). The newest position is then exact for this
+        /// frame, so it is used as it is instead of being smoothed between two older ones.
+        /// </summary>
+        public static bool Lockstep;
+
         /// <summary>True once the first position has been matched to the Valheim player.</summary>
         public static bool Anchored => _anchored;
 
@@ -110,7 +116,7 @@ namespace ValOutcast
             if (!_hasSample) return;
 
             // Show the newest two samples one after the other, so movement is smooth even though they arrive 20 times a second.
-            float t = Mathf.Clamp01((Time.unscaledTime - _latestTime) / _interval);
+            float t = Lockstep ? 1f : Mathf.Clamp01((Time.unscaledTime - _latestTime) / _interval);
             _currentPos = Vector3.Lerp(_prevPos, _latestPos, t);
             _currentLook = Vector3.Slerp(_prevLook, _latestLook, t);
 
