@@ -55,6 +55,8 @@ While Outcast drives: WASD, mouse, jump, crouch, left and right click and Use wo
 
 `tools/run_outcast.sh` gives you every weapon, the lightsaber included, for testing (`VO_GIVE_ALL=` with nothing after it turns that off). Outcast stays silent until you are in a Valheim world.
 
+Testing aid: F8 (in Valheim) spawns a boar 6 m in front of you, to try Outcast's weapons on. The Valheim log (`BepInEx/LogOutput.log`) shows `hit applied ...` lines when Outcast's hits reach a creature.
+
 Settings are in `BepInEx/config/com.valoutcast.bridge.cfg` inside the Valheim folder (created on the first run): `MouseDegreesPerCount` (mouse speed) and `Brightness` (overlay brightness). Set `VO_SV_FPS` before `tools/run_outcast.sh` to change how often Outcast's game logic runs (default 60; Outcast itself uses 20).
 
 ## Test

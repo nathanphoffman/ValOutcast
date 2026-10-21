@@ -4,6 +4,7 @@
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
          --noactors  leave out the two wandering creatures (they soak up shots fired near the start)
          --turnrate D  degrees per input message for --turn (default 0.5, 60 messages a second)
+         --near   put the two creatures about 1.5 m from the start (within reach of the lightsaber)
          --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
@@ -30,6 +31,7 @@ RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
 TURN = "--turn" in sys.argv
 NOACTORS = "--noactors" in sys.argv
+NEAR = "--near" in sys.argv
 TURN_RATE = float(sys.argv[sys.argv.index("--turnrate") + 1]) if "--turnrate" in sys.argv else 0.5
 NOWALL = "--nowall" in sys.argv
 if NOWALL:
@@ -66,7 +68,7 @@ def send_actors(link, ax, ay, az, t):
     """Two creatures wandering in small circles near the start."""
     if NOACTORS:
         return
-    for n, (dx, dz) in enumerate(((3.0, -2.0), (-3.0, 2.5))):
+    for n, (dx, dz) in enumerate(((1.2, -0.9), (-1.2, 1.0)) if NEAR else ((3.0, -2.0), (-3.0, 2.5))):
         a = t * 0.5 + n
         pos = (ax + dx + math.cos(a), ay, az + dz + math.sin(a))
         link.send_raw(lambda seq, n=n, pos=pos: vo.encode_actor_upsert(seq, 100 + n, pos, 0.5, 1.8, 255, vo.ACTOR_HOSTILE))

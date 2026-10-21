@@ -19,6 +19,8 @@ namespace ValOutcast
         private readonly HashSet<uint> _sentNow = new HashSet<uint>();
         private readonly List<uint> _gone = new List<uint>();
         private float _nextSend;
+        private float _nextReport;
+        private int _hitsApplied, _hitsUnknown, _sentCount;
 
         public void Update(VoLink link)
         {
@@ -34,6 +36,12 @@ namespace ValOutcast
             }
 
             ApplyHits(link, player);
+
+            if (Time.realtimeSinceStartup >= _nextReport)
+            {
+                _nextReport = Time.realtimeSinceStartup + 10f;
+                Plugin.LogMessage("creatures: " + _sentCount + " in range of Outcast, hits applied so far " + _hitsApplied + ", for unknown creatures " + _hitsUnknown);
+            }
 
             if (Time.realtimeSinceStartup < _nextSend) return;
             _nextSend = Time.realtimeSinceStartup + SendInterval;
@@ -69,6 +77,7 @@ namespace ValOutcast
             }
             _sentNow.Clear();
             foreach (uint id in seen) _sentNow.Add(id);
+            _sentCount = seen.Count;
         }
 
         private void ApplyHits(VoLink link, Player player)
@@ -76,7 +85,12 @@ namespace ValOutcast
             while (link.HitActors.Count > 0)
             {
                 VoLink.HitActorMsg msg = link.HitActors.Dequeue();
-                if (!_byId.TryGetValue(msg.Id, out Character target) || target == null || target.IsDead()) continue;
+                if (!_byId.TryGetValue(msg.Id, out Character target) || target == null || target.IsDead())
+                {
+                    _hitsUnknown++;
+                    Plugin.LogMessage("hit from Outcast for a creature that is not there (id " + msg.Id + ", damage " + msg.Damage.ToString("0") + ")");
+                    continue;
+                }
 
                 var hit = new HitData();
                 hit.m_damage.m_slash = msg.Damage * OutcastToValheim;
@@ -84,7 +98,10 @@ namespace ValOutcast
                 hit.m_dir = new Vector3(msg.DirX, msg.DirY, -msg.DirZ).normalized; // wire to Unity: flip Z
                 hit.m_pushForce = PushForce;
                 hit.m_attacker = player.GetZDOID();
+                float before = target.GetHealth();
                 target.Damage(hit);
+                _hitsApplied++;
+                Plugin.LogMessage("hit applied to " + target.m_name + ": damage " + msg.Damage.ToString("0") + ", health " + before.ToString("0") + " -> " + target.GetHealth().ToString("0"));
             }
         }
     }

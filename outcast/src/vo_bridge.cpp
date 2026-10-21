@@ -152,6 +152,7 @@ static void VO_SendProxyHits(const gentity_t *player)
 		VectorNormalize(toActor);
 		float wire[3];
 		VO_ToWire(toActor, wire, 1.0f);
+		if (getenv("VO_DEBUG_BOLTS")) gi.Printf("ValOutcast: hit creature %u for %d\n", (unsigned)s_proxies[i].id, damage);
 		vo_link_send_hit_actor(&s_link, s_proxies[i].id, (float)damage, wire);
 	}
 }
