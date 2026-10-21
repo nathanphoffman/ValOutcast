@@ -133,6 +133,22 @@ void VO_OverlayBeginFrame(void)
 	}
 }
 
+void VO_GetLighting(float ambient[3], float directed[3], float dir[3])
+{
+	static cvar_t *light = NULL;
+	static int seen = -1;
+	static float a[3] = {150, 150, 150}, d[3] = {130, 130, 130}, l[3] = {0.25f, 0.35f, 0.9f};
+	if (!light) light = ri.Cvar_Get("vo_light", "", 0);
+	if (light->modificationCount != seen) {
+		seen = light->modificationCount;
+		float v[9];
+		if (sscanf(light->string, "%f %f %f %f %f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8]) == 9) {
+			for (int i = 0; i < 3; i++) { a[i] = v[i]; d[i] = v[3 + i]; l[i] = v[6 + i]; }
+		}
+	}
+	for (int i = 0; i < 3; i++) { ambient[i] = a[i]; directed[i] = d[i]; dir[i] = l[i]; }
+}
+
 void VO_BlendFunc(GLenum src, GLenum dst)
 {
 	if (!VO_OverlayEnabled()) {
@@ -164,7 +180,7 @@ void VO_BlendFunc(GLenum src, GLenum dst)
 
 // The frame is drawn with premultiplied alpha (colors already scaled by coverage). Valheim draws it with ordinary
 // alpha blending, so convert in place. Light with no coverage (additive glow) becomes a see-through colored pixel.
-static void ToStraightAlpha(unsigned char *px, size_t pixelCount)
+static void ToStraightAlpha(unsigned char *px, size_t w, size_t h)
 {
 	static unsigned int inv[256];
 	static bool ready = false;
@@ -173,20 +189,48 @@ static void ToStraightAlpha(unsigned char *px, size_t pixelCount)
 		for (unsigned int a = 1; a < 256; a++) inv[a] = (255u << 16) / a;
 		ready = true;
 	}
-	for (size_t i = 0; i < pixelCount; i++, px += 4) {
-		unsigned int r = px[0], g = px[1], b = px[2], a = px[3];
-		unsigned int m = r > g ? r : g;
-		if (b > m) m = b;
-		if (m == 0 && a == 0) continue;
-		if (a < m) a = m;
-		if (a < 255) {
-			const unsigned int k = inv[a];
-			r = (r * k) >> 16; g = (g * k) >> 16; b = (b * k) >> 16;
-			px[0] = (unsigned char)(r > 255 ? 255 : r);
-			px[1] = (unsigned char)(g > 255 ? 255 : g);
-			px[2] = (unsigned char)(b > 255 ? 255 : b);
+	static int *nextSolid = NULL;     // for each pixel of a row: the nearest pixel to its right that is not see-through
+	static size_t nextSize = 0;
+	if (nextSize < w) {
+		free(nextSolid);
+		nextSolid = (int *)malloc(w * sizeof(int));
+		nextSize = w;
+	}
+	for (size_t y = 0; y < h; y++, px += w * 4) {
+		// Pass 1, right to left: remember the next pixel with something in it.
+		int next = -1;
+		for (size_t x = w; x-- > 0;) {
+			if (px[x * 4 + 3] != 0 || px[x * 4] || px[x * 4 + 1] || px[x * 4 + 2]) next = (int)x;
+			nextSolid[x] = next;
 		}
-		px[3] = (unsigned char)a;
+		// Pass 2, left to right: convert, and give see-through pixels the color of the nearest pixel with something in it.
+		// (Otherwise smoothing at the edges mixes in black and the edges look dark.)
+		int prev = -1;
+		for (size_t x = 0; x < w; x++) {
+			unsigned char *p = px + x * 4;
+			unsigned int r = p[0], g = p[1], b = p[2], a = p[3];
+			unsigned int m = r > g ? r : g;
+			if (b > m) m = b;
+			if (m == 0 && a == 0) {
+				int from = prev;
+				if (nextSolid[x] >= 0 && (from < 0 || (int)x - from > nextSolid[x] - (int)x)) from = nextSolid[x];
+				if (from >= 0) {
+					const unsigned char *q = px + (size_t)from * 4;
+					p[0] = q[0]; p[1] = q[1]; p[2] = q[2];
+				}
+				continue;
+			}
+			if (a < m) a = m;
+			if (a < 255) {
+				const unsigned int k = inv[a];
+				r = (r * k) >> 16; g = (g * k) >> 16; b = (b * k) >> 16;
+				p[0] = (unsigned char)(r > 255 ? 255 : r);
+				p[1] = (unsigned char)(g > 255 ? 255 : g);
+				p[2] = (unsigned char)(b > 255 ? 255 : b);
+			}
+			p[3] = (unsigned char)a;
+			prev = (int)x;
+		}
 	}
 }
 
@@ -206,7 +250,10 @@ void VO_OverlayPublish(void)
 		s_minPublishMs = n > 0 ? 1000 / n : 0;
 	}
 	const long now = NowMs();
-	if (now - s_lastPublishMs < s_minPublishMs) return;   // copying a frame out is the expensive part, so not every frame
+	// When Valheim asks for pictures (one per Valheim frame) every picture is wanted. Otherwise copying a frame out
+	// is the expensive part, so not every frame.
+	const bool requested = s_map && ((const FrameHeader *)s_map)->reserved[0] != 0;
+	if (!requested && now - s_lastPublishMs < s_minPublishMs) return;
 	s_lastPublishMs = now;
 	const int w = glConfig.vidWidth, h = glConfig.vidHeight;
 	if (w <= 0 || h <= 0) return;
@@ -217,7 +264,7 @@ void VO_OverlayPublish(void)
 	__atomic_store_n(&hd->frame, s_counter * 2 + 1, __ATOMIC_RELEASE);   // odd: being written
 	qglPixelStorei(GL_PACK_ALIGNMENT, 1);
 	qglReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, s_map + HEADER_SIZE);
-	ToStraightAlpha(s_map + HEADER_SIZE, (size_t)w * h);
+	ToStraightAlpha(s_map + HEADER_SIZE, (size_t)w, (size_t)h);
 	s_counter++;
 	__atomic_store_n(&hd->frame, s_counter * 2, __ATOMIC_RELEASE);        // even: complete
 }

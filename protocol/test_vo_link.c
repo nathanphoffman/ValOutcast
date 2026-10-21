@@ -102,6 +102,17 @@ int main(int argc, char **argv)
 		check(vo_decode_input(want + 8, n - 8, &in2) == 0 && in2.buttons == 3 && in2.right == -1 && in2.pitch == -0.5f && in2.weapon == 4, "input decode");
 		check(vo_decode_input(want + 8, 4, &in2) == -1, "input short");
 		check(vo_decode_input(want + 8, 24, &in2) == -1, "input without weapon is short");
+
+		{
+			vo_world w, w2;
+			w.sun_dir[0] = 0.0f; w.sun_dir[1] = 0.8f; w.sun_dir[2] = 0.6f;
+			w.sun_rgb[0] = 1.0f; w.sun_rgb[1] = 0.9f; w.sun_rgb[2] = 0.5f;
+			w.ambient[0] = 0.25f; w.ambient[1] = 0.5f; w.ambient[2] = 0.75f;
+			n = golden("world_context", want, 64);
+			check(n > 0 && vo_encode_world_context(got, 11, &w) == n && memcmp(got, want, n) == 0, "world_context bytes");
+			check(vo_decode_world_context(want + 8, n - 8, &w2) == 0 && w2.sun_dir[1] == 0.8f && w2.sun_rgb[2] == 0.5f && w2.ambient[2] == 0.75f, "world_context decode");
+			check(vo_decode_world_context(want + 8, 10, &w2) == -1, "world_context short");
+		}
 	}
 	check(vo_decode(hello, 16, &seq) == VO_MSG_HELLO && seq == 1, "decode hello");
 	check(vo_decode(hello, 4, NULL) == -1, "decode short");

@@ -16,6 +16,7 @@ MSG_ACTOR_REMOVE = 7
 MSG_HIT_ACTOR = 8
 MSG_PLAYER_HURT = 9
 MSG_INPUT = 10
+MSG_WORLD_CONTEXT = 11
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -126,6 +127,18 @@ def decode_input(payload):
     return struct.unpack_from("<I5fi", payload)
 
 
+def encode_world_context(seq, sun_dir, sun_rgb, ambient_rgb):
+    return _HEADER.pack(MAGIC, VERSION, MSG_WORLD_CONTEXT, seq) + struct.pack("<9f", *sun_dir, *sun_rgb, *ambient_rgb)
+
+
+def decode_world_context(payload):
+    """Return (sun_dir, sun_rgb, ambient_rgb) or None."""
+    if len(payload) < 36:
+        return None
+    v = struct.unpack_from("<9f", payload)
+    return v[0:3], v[3:6], v[6:9]
+
+
 def decode(data):
     """Return (type, seq, payload) or None if the packet is not valid."""
     if len(data) < _HEADER.size:
@@ -210,7 +223,7 @@ class Link:
                     self.player_state_ms = now
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
-                MSG_HIT_ACTOR: decode_hit_actor, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input,
+                MSG_HIT_ACTOR: decode_hit_actor, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

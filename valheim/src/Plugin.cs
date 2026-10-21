@@ -21,10 +21,11 @@ namespace ValOutcast
         private readonly InputForwarder _input = new InputForwarder();
         private Overlay _overlay;
         private readonly HudHider _hud = new HudHider();
+        private readonly WorldLight _light = new WorldLight();
         private PerfStats _perf;
 
         // A part that throws is switched off after logging once, so one bug can't flood the log or stop the others.
-        private bool _hudOk = true, _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
+        private bool _lightOk = true, _hudOk = true, _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
 
         private void Awake()
         {
@@ -79,6 +80,7 @@ namespace ValOutcast
             Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
             Run(ref _inputOk, "input", () => _input.Update(Link));
             Run(ref _overlayOk, "overlay", () => _overlay.Update());
+            Run(ref _lightOk, "light", () => _light.Update(Link));
             Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && Player.m_localPlayer != null));
             _perf.EndFrame(PlayerFollow.Active);
         }

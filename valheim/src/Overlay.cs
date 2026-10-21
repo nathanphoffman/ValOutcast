@@ -38,6 +38,7 @@ namespace ValOutcast
 
             try
             {
+                _reader.RequestFrame(); // one picture per Valheim frame, so the two games' frames keep step
                 if (_reader.TryRead(ref _pixels, out int width, out int height))
                 {
                     if (_texture == null || _texture.width != width || _texture.height != height)

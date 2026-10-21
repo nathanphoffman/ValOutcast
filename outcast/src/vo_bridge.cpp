@@ -156,6 +156,25 @@ static void VO_SendProxyHits(const gentity_t *player)
 	}
 }
 
+// How the world is lit, for lighting Outcast's models: handed to the renderer through the cvar "vo_light".
+static int VO_Clamp255(float v)
+{
+	return v < 0.0f ? 0 : (v > 255.0f ? 255 : (int)v);
+}
+
+static void VO_ApplyWorldContext(const vo_world *w)
+{
+	vec3_t dir;
+	VO_FromWire(w->sun_dir, dir, 1.0f);
+	VectorNormalize(dir);
+	char buf[160];
+	Com_sprintf(buf, sizeof(buf), "%d %d %d %d %d %d %.3f %.3f %.3f",
+	            VO_Clamp255(25.0f + w->ambient[0] * 230.0f), VO_Clamp255(25.0f + w->ambient[1] * 230.0f), VO_Clamp255(25.0f + w->ambient[2] * 230.0f),
+	            VO_Clamp255(w->sun_rgb[0] * 190.0f), VO_Clamp255(w->sun_rgb[1] * 190.0f), VO_Clamp255(w->sun_rgb[2] * 190.0f),
+	            dir[0], dir[1], dir[2]);
+	gi.cvar_set("vo_light", buf);
+}
+
 static void VO_ApplyPlayerHurt(const vo_hurt *h)
 {
 	gentity_t *player = &g_entities[0];
@@ -194,6 +213,9 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 	} else if (type == VO_MSG_PLAYER_HURT) {
 		vo_hurt h;
 		if (vo_decode_player_hurt(payload, len, &h) == 0) VO_ApplyPlayerHurt(&h);
+	} else if (type == VO_MSG_WORLD_CONTEXT) {
+		vo_world w;
+		if (vo_decode_world_context(payload, len, &w) == 0) VO_ApplyWorldContext(&w);
 	} else if (type == VO_MSG_INPUT) {
 		vo_input in;
 		if (vo_decode_input(payload, len, &in) == 0) {

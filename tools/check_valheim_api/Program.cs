@@ -95,6 +95,8 @@ class Program
             Method(type, m, 0);
         Method("Chat", "HasFocus", 0);
         Type("HotkeyBar");
+        Property("EnvMan", "instance");
+        Field("EnvMan", "m_dirLight", "Light");
 
         Console.WriteLine(missing == 0 ? "all Valheim hooks found" : missing + " Valheim hooks missing");
         return missing == 0 ? 0 : 1;

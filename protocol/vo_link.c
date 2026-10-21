@@ -203,6 +203,30 @@ int vo_decode_input(const uint8_t *payload, int len, vo_input *in)
 	return 0;
 }
 
+int vo_encode_world_context(uint8_t *out, uint32_t seq, const vo_world *w)
+{
+	int i;
+	put_header(out, VO_MSG_WORLD_CONTEXT, seq);
+	for (i = 0; i < 3; i++) {
+		put_f32(out + 8 + 4 * i, w->sun_dir[i]);
+		put_f32(out + 20 + 4 * i, w->sun_rgb[i]);
+		put_f32(out + 32 + 4 * i, w->ambient[i]);
+	}
+	return 44;
+}
+
+int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w)
+{
+	int i;
+	if (len < 36) return -1;
+	for (i = 0; i < 3; i++) {
+		w->sun_dir[i] = get_f32(payload + 4 * i);
+		w->sun_rgb[i] = get_f32(payload + 12 + 4 * i);
+		w->ambient[i] = get_f32(payload + 24 + 4 * i);
+	}
+	return 0;
+}
+
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out)
 {
 	if (len < VO_HEADER_SIZE) return -1;

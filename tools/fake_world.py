@@ -5,6 +5,7 @@ Options: --walk   send Input (walk forward, slowly turning) as if the Valheim wi
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
          --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting
+         --dark   send a dim, bluish world light (night) instead of bright daylight
          --nowall leave out the ring wall (flat ground all around)
          --hurt   send PlayerHurt (10 damage) every 8 seconds
 
@@ -29,6 +30,7 @@ if NOWALL:
     WALL_M = 0.0
 HURT = "--hurt" in sys.argv
 FIRE = "--fire" in sys.argv
+DARK = "--dark" in sys.argv
 ALT = "--alt" in sys.argv
 WEAPON = int(sys.argv[sys.argv.index("--weapon") + 1]) if "--weapon" in sys.argv else 0
 
@@ -69,6 +71,7 @@ last_pos = None
 last_actors = 0
 last_hurt = time.time()
 last_input = 0
+last_light = 0
 started_at = None
 weapon_sent = False
 last_print = 0
@@ -90,6 +93,12 @@ try:
             if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:
                 weapon, weapon_sent = WEAPON, True
             link.send_raw(lambda seq: vo.encode_input(seq, buttons, forward, 0.0, 0.0, yaw, 0.0, weapon))
+        if now - last_light > 0.25:
+            last_light = now
+            if DARK:
+                link.send_raw(lambda seq: vo.encode_world_context(seq, (0.0, 0.6, 0.8), (0.1, 0.12, 0.2), (0.08, 0.1, 0.18)))
+            else:
+                link.send_raw(lambda seq: vo.encode_world_context(seq, (0.4, 0.8, 0.45), (1.1, 1.0, 0.85), (0.5, 0.55, 0.6)))
         if link.player_state:
             pos, look = link.player_state
             now = time.time()

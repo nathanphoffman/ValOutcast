@@ -1,3 +1,62 @@
+diff --git a/code/client/cl_scrn.cpp b/code/client/cl_scrn.cpp
+index f2990bb..18e9a19 100644
+--- a/code/client/cl_scrn.cpp
++++ b/code/client/cl_scrn.cpp
+@@ -27,6 +27,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ #include "../server/exe_headers.h"
+ 
+ #include "client.h"
++#include <stdlib.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/mman.h>
+ #include "client_ui.h"
+ 
+ extern console_t con;
+@@ -479,6 +483,32 @@ This is called every frame, and can also be called explicitly to flush
+ text to the screen.
+ ==================
+ */
++// ValOutcast overlay mode (VO_OVERLAY set): Valheim asks for one picture per frame it draws (it counts up a number in
++// the shared frame file, see protocol/FRAME.md), and Outcast draws one picture per request. That keeps the two games'
++// frames in step instead of two free-running clocks drifting past each other. Until Valheim has asked for the first
++// time, Outcast draws as usual.
++static bool VO_OverlaySkipFrame( void )
++{
++	static int overlay = -1;
++	static const volatile unsigned int *header = NULL;
++	static unsigned int lastSeen = 0;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	if ( overlay != 1 ) return false;
++	if ( !header ) {
++		const int fd = open( "/dev/shm/valoutcast_frame", O_RDONLY );
++		if ( fd < 0 ) return false;
++		void *map = mmap( NULL, 32, PROT_READ, MAP_SHARED, fd, 0 );
++		close( fd );
++		if ( map == MAP_FAILED ) return false;
++		header = (const volatile unsigned int *)map;
++	}
++	const unsigned int requested = __atomic_load_n( &header[5], __ATOMIC_ACQUIRE );	// byte 20
++	if ( requested == 0 ) return false;
++	if ( requested == lastSeen ) return true;
++	lastSeen = requested;
++	return false;
++}
++
+ void SCR_UpdateScreen( void ) {
+ 	static int	recursive;
+ 
+@@ -489,6 +519,10 @@ void SCR_UpdateScreen( void ) {
+ 	// load the ref / ui / cgame if needed
+ 	CL_StartHunkUsers();
+ 
++	if ( VO_OverlaySkipFrame() ) {
++		return;
++	}
++
+ 	if ( ++recursive > 2 ) {
+ 		Com_Error( ERR_FATAL, "SCR_UpdateScreen: recursively called" );
+ 	}
 diff --git a/code/rd-vanilla/CMakeLists.txt b/code/rd-vanilla/CMakeLists.txt
 index 6c24eb2..4461793 100644
 --- a/code/rd-vanilla/CMakeLists.txt
@@ -81,7 +140,7 @@ index 741bb95..639f50b 100644
  	if(tess.shader)
  	{
 diff --git a/code/rd-vanilla/tr_light.cpp b/code/rd-vanilla/tr_light.cpp
-index d176af5..b883a7f 100644
+index d176af5..04d17c8 100644
 --- a/code/rd-vanilla/tr_light.cpp
 +++ b/code/rd-vanilla/tr_light.cpp
 @@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -92,15 +151,13 @@ index d176af5..b883a7f 100644
  
  #define	DLIGHT_AT_RADIUS		16
  // at the edge of a dlight's influence, this amount of light will be added
-@@ -142,6 +143,15 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
+@@ -142,6 +143,13 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
  	float			totalFactor;
  	unsigned short	*startGridPos;
  
 +	if ( VO_OverlayEnabled() )
-+	{	// overlay mode: the level is not drawn, so its lighting means nothing. Light everything evenly instead of leaving it black.
-+		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 150.0;
-+		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 130.0;
-+		VectorSet( ent->lightDir, 0.25f, 0.35f, 0.9f );
++	{	// overlay mode: the level is not drawn, so its lighting means nothing. Light models the way the Valheim world is lit.
++		VO_GetLighting( ent->ambientLight, ent->directedLight, ent->lightDir );
 +		VectorNormalize( ent->lightDir );
 +		return;
 +	}
@@ -129,6 +186,35 @@ index 4a472e2..fd7b8a4 100644
  		return;
  	}
  
+diff --git a/code/server/sv_snapshot.cpp b/code/server/sv_snapshot.cpp
+index 149a0eb..17e787b 100644
+--- a/code/server/sv_snapshot.cpp
++++ b/code/server/sv_snapshot.cpp
+@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ 
+ #include "../client/vmachine.h"
+ #include "server.h"
++#include <stdlib.h>
+ 
+ /*
+ =============================================================================
+@@ -413,6 +414,16 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
+ 			continue;
+ 		}
+ 
++		// ValOutcast overlay mode (VO_OVERLAY set): the player is not really inside the Outcast level, so the level's
++		// "what can be seen from here" rules would drop bullets and effects that leave it. Always send those.
++		// (Entity types: 3 = missile, 5 = beam, 13 and up = effect and sound events.)
++		static int voOverlay = -1;
++		if ( voOverlay < 0 ) voOverlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++		if ( voOverlay == 1 && ( ent->s.eType == 3 || ent->s.eType == 5 || ent->s.eType >= 13 ) ) {
++			SV_AddEntToSnapshot( svEnt, ent, eNums );
++			continue;
++		}
++
+ 		// broadcast entities are always sent, and so is the main player so we don't see noclip weirdness
+ 		if ( ent->svFlags & SVF_BROADCAST || !e) {
+ 			SV_AddEntToSnapshot( svEnt, ent, eNums );
 diff --git a/codeJK2/cgame/cg_ents.cpp b/codeJK2/cgame/cg_ents.cpp
 index bad8c73..4b00000 100644
 --- a/codeJK2/cgame/cg_ents.cpp

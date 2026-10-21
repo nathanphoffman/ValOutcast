@@ -98,10 +98,14 @@ Each phase ends with something you can run and check. Don't start the next one u
 - Done: `VO_GIVE_ALL` (on in `tools/run_outcast.sh`) gives every weapon, the lightsaber included, and 999 of every ammo type at the start of each level, topped up every half second, for testing.
 - Done: right click (Valheim's "Block") and middle click ("SecondaryAttack") are both Outcast's alternate fire.
 - Done: the lightsaber blade now shows in levels where Kyle starts without his saber (`give all` skipped the saber's setup; the bridge now does it). Models in the picture are lit evenly instead of by the invisible level's lighting (Kyle was a black silhouette in `artus_mine`). The picture is published 45 times a second (`VO_OVERLAY_FPS`), because fast things like bullets can be missed at lower rates.
+- Done: bullets, beams and effect events are always sent to Outcast's own view (they used to vanish once they left the hidden level's "visible from here" area). A bullet flying straight away from you is a small glowing dot near the crosshair, which is correct for a first-person view.
+- Done: lighting. Valheim sends the sun direction and sun and ambient colors (`WorldContext`, 4 times a second) and Outcast lights its models to match: bright by day, dark at night. (This replaces "time and weather sync" below for the part that matters for a picture of hands and a saber.)
+- Done: frame sync. Valheim asks for one picture per frame it draws (a counter in the shared frame file) and Outcast draws exactly one picture per request, instead of two free-running clocks. Tested: 298 requests gave 298 pictures, and no requests gave no drawing. The picture is about one frame behind. It is not a lockstep where Valheim waits.
+- Done: see-through pixels at the edges of Outcast's picture now carry the color of their neighbors, so smoothing no longer makes dark outlines (the "green screen" look).
 - Known: with the lightsaber out, Outcast's camera sits behind and above Kyle (that is how Jedi Outcast shows the saber), so the picture shows his back, while Valheim's camera is at his eyes.
 - Equipment is not linked: Valheim's items and inventory are not connected to Outcast's weapons. Outcast uses its own. Mapping (for example, an equipped Valheim sword to the lightsaber) would be a table that the Valheim plugin sends as a weapon request, but it is not built.
 - Done: plugin parts switch themselves off after one error instead of flooding the log.
-- Not done, on purpose: time of day and weather sync. Outcast only draws the hands and saber, so there is nothing for it to light yet.
+- Not done: weather (rain, fog) and time of day beyond the lighting above.
 - Not done: save syncing. Loading a Valheim save does not rewind Outcast (and the reverse).
 - Not done: death and respawn. When the Outcast player dies, Outcast's own death handling runs and Valheim carries on.
 

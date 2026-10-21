@@ -20,6 +20,7 @@ extern "C" {
 #define VO_MSG_HIT_ACTOR 8
 #define VO_MSG_PLAYER_HURT 9
 #define VO_MSG_INPUT 10
+#define VO_MSG_WORLD_CONTEXT 11
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -56,6 +57,12 @@ typedef struct vo_input {
 	float yaw, pitch;   /* degrees changed since the last packet */
 	int weapon;         /* 0 none, 1-9 slot, 10 next, 11 previous */
 } vo_input;
+
+typedef struct vo_world {
+	float sun_dir[3];   /* toward the sun, wire space, unit length */
+	float sun_rgb[3];   /* sun color with brightness applied */
+	float ambient[3];
+} vo_world;
 
 typedef void (*vo_log_fn)(const char *message);
 /* Called for every valid packet that is not Hello or Heartbeat. payload points just past the 8-byte header. */
@@ -96,6 +103,8 @@ int vo_encode_player_hurt(uint8_t *out, uint32_t seq, const vo_hurt *h);
 int vo_decode_player_hurt(const uint8_t *payload, int len, vo_hurt *h);
 int vo_encode_input(uint8_t *out, uint32_t seq, const vo_input *in);
 int vo_decode_input(const uint8_t *payload, int len, vo_input *in);
+int vo_encode_world_context(uint8_t *out, uint32_t seq, const vo_world *w);
+int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w);
 /* Sends a HitActor if connected. */
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);
 /* Returns the message type, or -1 if the packet is not valid. */

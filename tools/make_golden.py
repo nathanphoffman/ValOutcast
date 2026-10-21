@@ -13,6 +13,7 @@ golden = {
     "hit_actor": vo.encode_hit_actor(8, 7, 25.0, (0.0, 0.0, -1.0)),
     "player_hurt": vo.encode_player_hurt(9, 10.0, (1.0, 0.0, 0.0), 42),
     "input": vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5, 4),
+    "world_context": vo.encode_world_context(11, (0.0, 0.8, 0.6), (1.0, 0.9, 0.5), (0.25, 0.5, 0.75)),
 }
 with open(os.path.join(root, "protocol", "golden.txt"), "w") as f:
     f.write("# name hex. Every implementation (Python, C, C#) must encode these exact bytes. Regenerate with tools/make_golden.py.\n")

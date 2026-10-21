@@ -8,11 +8,16 @@ namespace ValOutcast
     {
         public const uint Magic = 0x52464F56;
         public const int HeaderSize = 32;
+        public const int RequestOffset = 20;
 
         private readonly string _path;
         private FileStream _file;
         private readonly byte[] _header = new byte[HeaderSize];
         private uint _lastCounter;
+        private FileStream _requestFile;
+        private uint _requests;
+        private bool _requestsKnown;
+        private readonly byte[] _four = new byte[4];
 
         public FrameReader(string path)
         {
@@ -65,10 +70,38 @@ namespace ValOutcast
             return true;
         }
 
+        /// <summary>
+        /// Asks the other game for one new picture (it draws one per request, so its pictures keep step with ours).
+        /// Call once per frame. Does nothing if the frame file does not exist yet.
+        /// </summary>
+        public void RequestFrame()
+        {
+            if (_requestFile == null)
+            {
+                if (!File.Exists(_path)) return;
+                _requestFile = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite, 1);
+            }
+            if (!_requestsKnown)
+            {
+                // Carry on from whatever count is in the file, so it never goes back.
+                _requestFile.Position = RequestOffset;
+                _requests = _requestFile.Read(_four, 0, 4) == 4 ? BitConverter.ToUInt32(_four, 0) : 0;
+                _requestsKnown = true;
+            }
+            _requests++;
+            if (_requests == 0) _requests = 1; // zero means "nobody is asking"
+            BitConverter.GetBytes(_requests).CopyTo(_four, 0);
+            _requestFile.Position = RequestOffset;
+            _requestFile.Write(_four, 0, 4);
+        }
+
         public void Close()
         {
             _file?.Dispose();
             _file = null;
+            _requestFile?.Dispose();
+            _requestFile = null;
+            _requestsKnown = false;
         }
     }
 }

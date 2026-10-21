@@ -22,6 +22,7 @@ namespace ValOutcast
         public const byte MsgHitActor = 8;
         public const byte MsgPlayerHurt = 9;
         public const byte MsgInput = 10;
+        public const byte MsgWorldContext = 11;
         public const uint ButtonAttack = 1;
         public const uint ButtonAltAttack = 2;
         public const uint ButtonUse = 4;
@@ -196,6 +197,25 @@ namespace ValOutcast
             BitConverter.GetBytes(pitch).CopyTo(b, 28);
             BitConverter.GetBytes(weapon).CopyTo(b, 32);
             return b;
+        }
+
+        public static byte[] EncodeWorldContext(uint seq, float[] sunDir, float[] sunRgb, float[] ambient)
+        {
+            var b = new byte[44];
+            WriteHeader(b, MsgWorldContext, seq);
+            for (int i = 0; i < 3; i++)
+            {
+                BitConverter.GetBytes(sunDir[i]).CopyTo(b, 8 + 4 * i);
+                BitConverter.GetBytes(sunRgb[i]).CopyTo(b, 20 + 4 * i);
+                BitConverter.GetBytes(ambient[i]).CopyTo(b, 32 + 4 * i);
+            }
+            return b;
+        }
+
+        /// <summary>How the world is lit: direction toward the sun, sun color (brightness applied) and ambient color.</summary>
+        public void SendWorldContext(float[] sunDir, float[] sunRgb, float[] ambient)
+        {
+            if (Connected) SendPacket(EncodeWorldContext(++_seq, sunDir, sunRgb, ambient));
         }
 
         /// <summary>Reads a HitActor packet. Returns false if it is too short.</summary>
