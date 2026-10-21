@@ -13,7 +13,8 @@ This is a separate channel from the UDP protocol in `PROTOCOL.md`, because it is
 | 12 | u32 | height in pixels |
 | 16 | u32 | frame counter: even = frame number x 2, complete. Odd = being written right now. |
 | 20 | u32 | picture requests: the reading game adds one every frame it draws. The writing game draws one new picture per request, so the two games' frames stay in step. 0 means nobody is asking yet (the writer then draws freely). |
-| 24 | 8 bytes | reserved |
+| 24 | f32 | wanted horizontal field of view in degrees, written by the reading game together with the picture requests. The writing game draws with it so its things line up with the reading game's world. 0 means not given (the writer uses its own). |
+| 28 | 4 bytes | reserved |
 | 32 | width x height x 4 bytes | pixels, RGBA, 8 bits each, the first row is the **bottom** of the picture (OpenGL order) |
 
 Reading: read the counter, copy the pixels, read the counter again. Use the copy only if both reads were the same even number.

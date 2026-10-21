@@ -1,5 +1,5 @@
 diff --git a/code/client/cl_scrn.cpp b/code/client/cl_scrn.cpp
-index f2990bb..18e9a19 100644
+index f2990bb..b59c3be 100644
 --- a/code/client/cl_scrn.cpp
 +++ b/code/client/cl_scrn.cpp
 @@ -27,6 +27,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -13,7 +13,7 @@ index f2990bb..18e9a19 100644
  #include "client_ui.h"
  
  extern console_t con;
-@@ -479,6 +483,32 @@ This is called every frame, and can also be called explicitly to flush
+@@ -479,6 +483,37 @@ This is called every frame, and can also be called explicitly to flush
  text to the screen.
  ==================
  */
@@ -38,15 +38,20 @@ index f2990bb..18e9a19 100644
 +	}
 +	const unsigned int requested = __atomic_load_n( &header[5], __ATOMIC_ACQUIRE );	// byte 20
 +	if ( requested == 0 ) return false;
-+	if ( requested == lastSeen ) return true;
-+	lastSeen = requested;
-+	return false;
++	static int lastChange = 0;	// a number that stopped changing is left over from a Valheim that quit: draw as usual
++	const int now = Sys_Milliseconds();
++	if ( requested != lastSeen ) {
++		lastSeen = requested;
++		lastChange = now;
++		return false;
++	}
++	return now - lastChange <= 250;
 +}
 +
  void SCR_UpdateScreen( void ) {
  	static int	recursive;
  
-@@ -489,6 +519,10 @@ void SCR_UpdateScreen( void ) {
+@@ -489,6 +524,10 @@ void SCR_UpdateScreen( void ) {
  	// load the ref / ui / cgame if needed
  	CL_StartHunkUsers();
  
@@ -58,7 +63,7 @@ index f2990bb..18e9a19 100644
  		Com_Error( ERR_FATAL, "SCR_UpdateScreen: recursively called" );
  	}
 diff --git a/code/qcommon/common.cpp b/code/qcommon/common.cpp
-index aeaff24..6f4aad9 100644
+index aeaff24..9994f72 100644
 --- a/code/qcommon/common.cpp
 +++ b/code/qcommon/common.cpp
 @@ -37,6 +37,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -73,7 +78,7 @@ index aeaff24..6f4aad9 100644
  extern refexport_t re;
  
  static fileHandle_t	logfile;
-@@ -1383,6 +1388,37 @@ void G2Time_ResetTimers(void);
+@@ -1383,6 +1388,40 @@ void G2Time_ResetTimers(void);
  void G2Time_ReportTimers(void);
  #endif
  
@@ -95,14 +100,17 @@ index aeaff24..6f4aad9 100644
 +		header = (const volatile unsigned int *)map;
 +	}
 +	if ( __atomic_load_n( &header[5], __ATOMIC_ACQUIRE ) == 0 ) return false;	// byte 20: nobody is asking
++	static int lastChange = 0;	// when the request number last changed; a number that stopped changing is left over from a Valheim that quit
 +	const int start = Sys_Milliseconds();
 +	for ( ;; ) {
++		const int now = Sys_Milliseconds();
 +		const unsigned int requested = __atomic_load_n( &header[5], __ATOMIC_ACQUIRE );
 +		if ( requested != lastSeen ) {
 +			lastSeen = requested;
++			lastChange = now;
 +			return true;
 +		}
-+		if ( Sys_Milliseconds() - start >= 50 ) return false;
++		if ( now - lastChange > 250 || now - start >= 50 ) return false;
 +		struct timespec ts = { 0, 100000 };	// 0.1 ms
 +		nanosleep( &ts, NULL );
 +	}
@@ -111,7 +119,7 @@ index aeaff24..6f4aad9 100644
  void Com_Frame( void ) {
  	try
  	{
-@@ -1421,6 +1457,7 @@ void Com_Frame( void ) {
+@@ -1421,6 +1460,7 @@ void Com_Frame( void ) {
  		// that framerate is stable at the requested value.
  		minMsec -= bias;
  
@@ -119,7 +127,7 @@ index aeaff24..6f4aad9 100644
  		timeVal = Com_TimeVal(minMsec);
  		do {
  			// Busy sleep the last millisecond for better timeout precision
-@@ -1429,6 +1466,7 @@ void Com_Frame( void ) {
+@@ -1429,6 +1469,7 @@ void Com_Frame( void ) {
  			else
  				Sys_Sleep(timeVal - 1);
  		} while( (timeVal = Com_TimeVal(minMsec)) != 0 );
@@ -363,6 +371,57 @@ index 8c73e52..81d4641 100644
  	int			i;
  	entityState_t	*ent;
  	centity_t	*cent;
+diff --git a/codeJK2/cgame/cg_view.cpp b/codeJK2/cgame/cg_view.cpp
+index 79721d7..84d68dc 100644
+--- a/codeJK2/cgame/cg_view.cpp
++++ b/codeJK2/cgame/cg_view.cpp
+@@ -25,6 +25,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ // for a 3D rendering
+ 
+ #include "cg_local.h"
++#include <stdlib.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/mman.h>
+ #include "cg_media.h"
+ #include "FxScheduler.h"
+ #include "../game/wp_saber.h"
+@@ -1244,6 +1248,26 @@ Calcs Y FOV from given X FOV
+ #define	WAVE_AMPLITUDE	1
+ #define	WAVE_FREQUENCY	0.4
+ 
++// ValOutcast overlay mode (VO_OVERLAY set): Valheim writes its own horizontal field of view into the shared frame file
++// (byte 24, see protocol/FRAME.md) and Outcast draws with the same one, so its things line up with Valheim's world.
++static float VO_OverlayFov( float fov )
++{
++	static int overlay = -1;
++	static const volatile float *header = NULL;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	if ( overlay != 1 ) return fov;
++	if ( !header ) {
++		const int fd = open( "/dev/shm/valoutcast_frame", O_RDONLY );
++		if ( fd < 0 ) return fov;
++		void *map = mmap( NULL, 32, PROT_READ, MAP_SHARED, fd, 0 );
++		close( fd );
++		if ( map == MAP_FAILED ) return fov;
++		header = (const volatile float *)map;
++	}
++	const float wanted = header[6];
++	return ( wanted >= 30.0f && wanted <= 140.0f ) ? wanted : fov;
++}
++
+ qboolean CG_CalcFOVFromX( float fov_x )
+ {
+ 	float	x;
+@@ -1387,7 +1411,7 @@ static qboolean	CG_CalcFov( void ) {
+ 		}
+ 		else
+ 		{
+-			fov_x = cg_fov.value;
++			fov_x = VO_OverlayFov( cg_fov.value );
+ 		}
+ 		if ( fov_x < 1 ) {
+ 			fov_x = 1;
 diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
 index 2790dc8..6242832 100644
 --- a/codeJK2/game/CMakeLists.txt
@@ -444,6 +503,32 @@ index 671b309..844817b 100644
  	level.framenum++;
  	level.previousTime = level.time;
  	level.time = levelTime;
+diff --git a/codeJK2/game/g_weapon.cpp b/codeJK2/game/g_weapon.cpp
+index 4fb25bb..9575f91 100644
+--- a/codeJK2/game/g_weapon.cpp
++++ b/codeJK2/game/g_weapon.cpp
+@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ // perform the server side effects of a weapon firing
+ 
+ #include "g_headers.h"
++#include <stdlib.h>
+ 
+ #include "g_local.h"
+ #include "g_functions.h"
+@@ -366,7 +367,12 @@ void CalcMuzzlePoint( gentity_t *const ent, vec3_t wpFwd, vec3_t right, vec3_t w
+ 	vec3_t		org;
+ 	mdxaBone_t	boltMatrix;
+ 
+-	if( !lead_in ) //&& ent->s.number != 0
++	// ValOutcast overlay mode (VO_OVERLAY set): the player's body model never turns with the view (Valheim turns the view),
++	// so the muzzle point taken from the model would stay put while you turn. Shots start from the eyes instead.
++	static int voOverlay = -1;
++	if ( voOverlay < 0 ) voOverlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++
++	if( !lead_in && !( voOverlay == 1 && ent->s.number == 0 ) ) //&& ent->s.number != 0
+ 	{//Not players or melee
+ 		if( ent->client )
+ 		{
 diff --git a/shared/sdl/sdl_sound.cpp b/shared/sdl/sdl_sound.cpp
 index 45e5a88..71fedd4 100644
 --- a/shared/sdl/sdl_sound.cpp

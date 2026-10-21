@@ -2,6 +2,7 @@
 """Pretend to be the world side (Valheim) so the player side can be tested alone.
 
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
+         --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
          --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting
@@ -25,6 +26,7 @@ RING_OUTER_M = 7.0
 WALL_M = 3.0
 RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
+TURN = "--turn" in sys.argv
 NOWALL = "--nowall" in sys.argv
 if NOWALL:
     WALL_M = 0.0
@@ -87,7 +89,7 @@ try:
             # Input is also how the world side says "I am in a world and playing": send it even when standing still.
             last_input = now
             forward = 1.0 if WALK else 0.0
-            yaw = 0.0 if (NOWALL or not WALK) else 0.5
+            yaw = 0.5 if TURN else (0.0 if (NOWALL or not WALK) else 0.5)
             buttons = (vo.BUTTON_ATTACK if FIRE else 0) | (vo.BUTTON_ALT_ATTACK if ALT else 0)
             weapon = 0
             if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:

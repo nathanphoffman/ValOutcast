@@ -43,7 +43,7 @@ namespace ValOutcast
 
             try
             {
-                _reader.RequestFrame(); // one picture per Valheim frame, so the two games' frames keep step
+                _reader.RequestFrame(HorizontalFov()); // one picture per Valheim frame, so the two games' frames keep step
                 // Wait for that picture (Outcast makes it in a few milliseconds), so it is shown in the same frame it was asked for.
                 bool got = false;
                 int width = 0, height = 0;
@@ -92,6 +92,18 @@ namespace ValOutcast
             {
                 _show = false; // Outcast stopped drawing: don't leave a frozen picture on screen
             }
+        }
+
+        /// <summary>
+        /// Valheim's horizontal field of view in degrees (0 if there is no camera). Outcast draws with the same one, otherwise its
+        /// things slide across the screen at a different speed than Valheim's world as you turn.
+        /// </summary>
+        private static float HorizontalFov()
+        {
+            Camera cam = Camera.main;
+            if (cam == null || cam.pixelHeight <= 0) return 0f;
+            float aspect = (float)cam.pixelWidth / cam.pixelHeight;
+            return 2f * Mathf.Atan(Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad * 0.5f) * aspect) * Mathf.Rad2Deg;
         }
 
         /// <summary>Call from OnGUI.</summary>

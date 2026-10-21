@@ -9,6 +9,7 @@ namespace ValOutcast
         public const uint Magic = 0x52464F56;
         public const int HeaderSize = 32;
         public const int RequestOffset = 20;
+        public const int FovOffset = 24;
 
         private readonly string _path;
         private FileStream _file;
@@ -73,8 +74,9 @@ namespace ValOutcast
         /// <summary>
         /// Asks the other game for one new picture (it draws one per request, so its pictures keep step with ours).
         /// Call once per frame. Does nothing if the frame file does not exist yet.
+        /// fovDegrees is Valheim's horizontal field of view, so the other game can draw with the same one (0 = not given).
         /// </summary>
-        public void RequestFrame()
+        public void RequestFrame(float fovDegrees = 0f)
         {
             if (_requestFile == null)
             {
@@ -92,6 +94,9 @@ namespace ValOutcast
             if (_requests == 0) _requests = 1; // zero means "nobody is asking"
             BitConverter.GetBytes(_requests).CopyTo(_four, 0);
             _requestFile.Position = RequestOffset;
+            _requestFile.Write(_four, 0, 4);
+            BitConverter.GetBytes(fovDegrees).CopyTo(_four, 0);
+            _requestFile.Position = FovOffset;
             _requestFile.Write(_four, 0, 4);
         }
 
