@@ -2,6 +2,8 @@
 """Pretend to be the world side (Valheim) so the player side can be tested alone.
 
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
+         --noactors  leave out the two wandering creatures (they soak up shots fired near the start)
+         --turnrate D  degrees per input message for --turn (default 0.5, 60 messages a second)
          --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
@@ -27,6 +29,8 @@ WALL_M = 3.0
 RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
 TURN = "--turn" in sys.argv
+NOACTORS = "--noactors" in sys.argv
+TURN_RATE = float(sys.argv[sys.argv.index("--turnrate") + 1]) if "--turnrate" in sys.argv else 0.5
 NOWALL = "--nowall" in sys.argv
 if NOWALL:
     WALL_M = 0.0
@@ -60,6 +64,8 @@ def send_field(link, ax, ay, az):
 
 def send_actors(link, ax, ay, az, t):
     """Two creatures wandering in small circles near the start."""
+    if NOACTORS:
+        return
     for n, (dx, dz) in enumerate(((3.0, -2.0), (-3.0, 2.5))):
         a = t * 0.5 + n
         pos = (ax + dx + math.cos(a), ay, az + dz + math.sin(a))
@@ -89,7 +95,7 @@ try:
             # Input is also how the world side says "I am in a world and playing": send it even when standing still.
             last_input = now
             forward = 1.0 if WALK else 0.0
-            yaw = 0.5 if TURN else (0.0 if (NOWALL or not WALK) else 0.5)
+            yaw = TURN_RATE if TURN else (0.0 if (NOWALL or not WALK) else 0.5)
             buttons = (vo.BUTTON_ATTACK if FIRE else 0) | (vo.BUTTON_ALT_ATTACK if ALT else 0)
             weapon = 0
             if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:

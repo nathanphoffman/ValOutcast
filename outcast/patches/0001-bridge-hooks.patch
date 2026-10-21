@@ -329,7 +329,7 @@ index bad8c73..4b00000 100644
  	//we must have restarted the game
  	if (!cent->gent)
 diff --git a/codeJK2/cgame/cg_predict.cpp b/codeJK2/cgame/cg_predict.cpp
-index 8c73e52..81d4641 100644
+index 8c73e52..809e157 100644
 --- a/codeJK2/cgame/cg_predict.cpp
 +++ b/codeJK2/cgame/cg_predict.cpp
 @@ -148,10 +148,28 @@ void CG_ClipMoveToEntities ( const vec3_t start, const vec3_t mins, const vec3_t
@@ -371,6 +371,31 @@ index 8c73e52..81d4641 100644
  	int			i;
  	entityState_t	*ent;
  	centity_t	*cent;
+@@ -596,7 +617,7 @@ to ease the jerk.
+ =================
+ */
+ extern	qboolean	player_locked;
+-void CG_PredictPlayerState( void ) {
++static void CG_PredictPlayerStateReal( void ) {
+ 	int			cmdNum, current;
+ 	playerState_t	oldPlayerState;
+ 
+@@ -735,4 +756,14 @@ void CG_PredictPlayerState( void ) {
+ 	CG_TransitionPlayerState( &cg.predicted_player_state, &oldPlayerState );
+ }
+ 
+-
++// ValOutcast overlay mode (VO_OVERLAY set): Valheim turns and moves the player inside Outcast's game logic, but the
++// client side that draws the picture only knows its own (never moving) input, so it kept looking the way it started
++// and anything in the world (shots, effects) was drawn from the wrong angle. Draw from where the player really is.
++void CG_PredictPlayerState( void ) {
++	CG_PredictPlayerStateReal();
++	if ( VO_OverlayMode() && cg.snap && cg.snap->ps.viewEntity == 0 && g_entities[0].client )
++	{
++		VectorCopy( g_entities[0].client->ps.viewangles, cg.predicted_player_state.viewangles );
++		VectorCopy( g_entities[0].client->ps.origin, cg.predicted_player_state.origin );
++	}
++}
 diff --git a/codeJK2/cgame/cg_view.cpp b/codeJK2/cgame/cg_view.cpp
 index 79721d7..84d68dc 100644
 --- a/codeJK2/cgame/cg_view.cpp
@@ -422,6 +447,37 @@ index 79721d7..84d68dc 100644
  		}
  		if ( fov_x < 1 ) {
  			fov_x = 1;
+diff --git a/codeJK2/cgame/cg_weapons.cpp b/codeJK2/cgame/cg_weapons.cpp
+index 55f423f..0500690 100644
+--- a/codeJK2/cgame/cg_weapons.cpp
++++ b/codeJK2/cgame/cg_weapons.cpp
+@@ -22,6 +22,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "cg_local.h"
++
++// ValOutcast: the drawn gun barrel's place relative to the eyes (forward, left, up), and the weapon it was measured for.
++float vo_muzzleRel[3];
++int vo_muzzleRelWeapon = -1;
+ #include "cg_media.h"
+ #include "FxScheduler.h"
+ #include "../game/wp_saber.h"
+@@ -1164,6 +1168,15 @@ void CG_AddViewWeapon( playerState_t *ps )
+ 
+ 	if ( cent->gent && cent->gent->client )
+ 	{
++		if ( cent->gent->s.number == 0 )
++		{	// ValOutcast: where the drawn gun's barrel is, relative to the eyes (see CalcMuzzlePoint in g_weapon.cpp)
++			vec3_t rel;
++			VectorSubtract( flash.origin, cg.refdef.vieworg, rel );
++			vo_muzzleRel[0] = DotProduct( rel, cg.refdef.viewaxis[0] );	// forward
++			vo_muzzleRel[1] = DotProduct( rel, cg.refdef.viewaxis[1] );	// left
++			vo_muzzleRel[2] = DotProduct( rel, cg.refdef.viewaxis[2] );	// up
++			vo_muzzleRelWeapon = ps->weapon;
++		}
+ 		VectorCopy(flash.origin, cent->gent->client->renderInfo.muzzlePoint);
+ 		VectorCopy(flash.axis[0], cent->gent->client->renderInfo.muzzleDir);
+ //		VectorNormalize( cent->gent->client->renderInfo.muzzleDir );
 diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
 index 2790dc8..6242832 100644
 --- a/codeJK2/game/CMakeLists.txt
@@ -503,8 +559,33 @@ index 671b309..844817b 100644
  	level.framenum++;
  	level.previousTime = level.time;
  	level.time = levelTime;
+diff --git a/codeJK2/game/g_missile.cpp b/codeJK2/game/g_missile.cpp
+index aa8d6c7..ecba92f 100644
+--- a/codeJK2/game/g_missile.cpp
++++ b/codeJK2/game/g_missile.cpp
+@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "g_headers.h"
++#include <stdlib.h>
+ 
+ #include "g_local.h"
+ #include "g_functions.h"
+@@ -553,6 +554,12 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace, int hitLoc=HL_NONE )
+ 	vec3_t			diff;
+ 
+ 	other = &g_entities[trace->entityNum];
++	if ( getenv( "VO_DEBUG_BOLTS" ) && ent->owner && ent->owner->s.number == 0 )
++	{
++		gi.Printf( "BOLT hit entity %d (%s) contents 0x%x, trace contents 0x%x, at (%.0f %.0f %.0f), %.0f units from the player\n", trace->entityNum,
++		           other->classname ? other->classname : "?", other->contents, trace->contents, trace->endpos[0], trace->endpos[1], trace->endpos[2],
++		           Distance( trace->endpos, ent->owner->currentOrigin ) );
++	}
+ 	if ( other == ent )
+ 	{
+ 		assert(0&&"missile hit itself!!!");
 diff --git a/codeJK2/game/g_weapon.cpp b/codeJK2/game/g_weapon.cpp
-index 4fb25bb..9575f91 100644
+index 4fb25bb..d96dce1 100644
 --- a/codeJK2/game/g_weapon.cpp
 +++ b/codeJK2/game/g_weapon.cpp
 @@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -515,20 +596,61 @@ index 4fb25bb..9575f91 100644
  
  #include "g_local.h"
  #include "g_functions.h"
-@@ -366,7 +367,12 @@ void CalcMuzzlePoint( gentity_t *const ent, vec3_t wpFwd, vec3_t right, vec3_t w
+@@ -84,6 +85,21 @@ gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t
+ {
+ 	gentity_t	*missile;
+ 
++	// ValOutcast overlay mode (VO_OVERLAY set): the player's shots are slowed down so they can be followed by eye. At normal
++	// speed a shot covers over a meter per frame, crosses the screen in a frame or two and is a tiny dot after that.
++	// VO_BOLT_SPEED changes the speed (1 = Outcast's normal speed). Thrown things (grenades, mines) are left alone.
++	static int voOverlay = -1;
++	static float voBoltSpeed = 0.3f;
++	if ( voOverlay < 0 )
++	{
++		voOverlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++		if ( getenv( "VO_BOLT_SPEED" ) && atof( getenv( "VO_BOLT_SPEED" ) ) > 0.0 ) voBoltSpeed = (float)atof( getenv( "VO_BOLT_SPEED" ) );
++	}
++	if ( voOverlay == 1 && owner && owner->s.number == 0 && owner->s.weapon != WP_THERMAL && owner->s.weapon != WP_TRIP_MINE && owner->s.weapon != WP_DET_PACK )
++	{
++		vel *= voBoltSpeed;
++	}
++
+ 	missile = G_Spawn();
+ 
+ 	missile->nextthink = level.time + life;
+@@ -366,6 +382,32 @@ void CalcMuzzlePoint( gentity_t *const ent, vec3_t wpFwd, vec3_t right, vec3_t w
  	vec3_t		org;
  	mdxaBone_t	boltMatrix;
  
--	if( !lead_in ) //&& ent->s.number != 0
 +	// ValOutcast overlay mode (VO_OVERLAY set): the player's body model never turns with the view (Valheim turns the view),
 +	// so the muzzle point taken from the model would stay put while you turn. Shots start from the eyes instead.
 +	static int voOverlay = -1;
 +	if ( voOverlay < 0 ) voOverlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
 +
-+	if( !lead_in && !( voOverlay == 1 && ent->s.number == 0 ) ) //&& ent->s.number != 0
++	if ( voOverlay == 1 && ent->s.number == 0 && ent->client )
++	{	// Start shots at the gun barrel as drawn on screen, turned along with the view. If it is not known yet (no gun drawn), the eyes.
++		extern float vo_muzzleRel[3];
++		extern int vo_muzzleRelWeapon;
++		vec3_t f, r, u;
++		AngleVectors( ent->client->ps.viewangles, f, r, u );
++		VectorCopy( ent->currentOrigin, muzzlePoint );
++		muzzlePoint[2] += ent->client->ps.viewheight;
++		if ( vo_muzzleRelWeapon == ent->s.weapon )
++		{
++			VectorMA( muzzlePoint, vo_muzzleRel[0], f, muzzlePoint );
++			VectorMA( muzzlePoint, -vo_muzzleRel[1], r, muzzlePoint );	// the stored value is to the left
++			VectorMA( muzzlePoint, vo_muzzleRel[2], u, muzzlePoint );
++		}
++		else
++		{
++			VectorMA( muzzlePoint, 12, f, muzzlePoint );
++		}
++		return;
++	}
++
+ 	if( !lead_in ) //&& ent->s.number != 0
  	{//Not players or melee
  		if( ent->client )
- 		{
 diff --git a/shared/sdl/sdl_sound.cpp b/shared/sdl/sdl_sound.cpp
 index 45e5a88..71fedd4 100644
 --- a/shared/sdl/sdl_sound.cpp

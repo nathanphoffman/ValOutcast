@@ -5,6 +5,7 @@
 # Valheim asks for one picture per frame it draws, so Outcast draws exactly as often as Valheim does and the two stay in step.
 # VO_OVERLAY_FPS only matters when Valheim is not asking (default 45).
 # VO_SV_FPS sets how many times a second the game logic runs (Outcast normally does 20, which feels laggy here).
+# VO_BOLT_SPEED scales the speed of your shots (default 0.3). At 1 (Outcast's normal speed) they are too fast to see.
 # Console messages are not drawn on the picture (con_notifytime 0).
 MAP="${1:-artus_mine}"
 W="${2:-1280}"
