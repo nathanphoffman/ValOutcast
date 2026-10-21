@@ -55,7 +55,7 @@ Each phase ends with something you can run and check. Don't start the next one u
 - Python, C and C# links all pass the golden packets and the connect/lose tests: `tools/test_protocol.py`, `tools/test_c.sh`, `tools/test_csharp.sh`.
 - Outcast side confirmed against `tools/fake_world.py`: logs "connected", and "lost connection" when the fake quits.
 - Note: Outcast stops ticking while a map loads, so a long load can show a brief "lost connection" then "connected" again. Expected.
-- Not yet confirmed: Valheim and Outcast connecting to each other for real.
+- **Confirmed with the real games:** Valheim logged `link: connected` while Outcast was running. The real-game "lost connection" check was not isolated (both games were closed together); the fake-partner tests cover it. **Phase 1 is done.**
 
 ### Phase 2: Player sync
 - Outcast sends PlayerState (position, look direction) every frame.
