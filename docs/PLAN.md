@@ -50,6 +50,13 @@ Each phase ends with something you can run and check. Don't start the next one u
 - If one side dies, the other detects it (heartbeat timeout) and carries on.
 - **Done when:** both games show "connected" in their logs, and killing one is noticed by the other.
 
+**Phase 1 status:** built and tested headless; only the real Valheim-to-Outcast run is left.
+- Spec: `protocol/PROTOCOL.md` (ports 47100 world / 47101 player, golden packets).
+- Python, C and C# links all pass the golden packets and the connect/lose tests: `tools/test_protocol.py`, `tools/test_c.sh`, `tools/test_csharp.sh`.
+- Outcast side confirmed against `tools/fake_world.py`: logs "connected", and "lost connection" when the fake quits.
+- Note: Outcast stops ticking while a map loads, so a long load can show a brief "lost connection" then "connected" again. Expected.
+- Not yet confirmed: Valheim and Outcast connecting to each other for real.
+
 ### Phase 2: Player sync
 - Outcast sends PlayerState (position, look direction) every frame.
 - Valheim moves its player to match and hides its own input.

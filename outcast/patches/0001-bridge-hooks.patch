@@ -1,0 +1,50 @@
+diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
+index 2790dc8..af29a15 100644
+--- a/codeJK2/game/CMakeLists.txt
++++ b/codeJK2/game/CMakeLists.txt
+@@ -86,6 +86,8 @@ set(JK2SPGameGameFiles
+ 	"${JK2SPDir}/game/g_itemLoad.cpp"
+ 	"${JK2SPDir}/game/g_items.cpp"
+ 	"${JK2SPDir}/game/g_main.cpp"
++	"${JK2SPDir}/game/valoutcast/vo_bridge.cpp"
++	"${JK2SPDir}/game/valoutcast/vo_link.c"
+ 	"${JK2SPDir}/game/g_mem.cpp"
+ 	"${JK2SPDir}/game/g_misc.cpp"
+ 	"${JK2SPDir}/game/g_misc_model.cpp"
+diff --git a/codeJK2/game/g_main.cpp b/codeJK2/game/g_main.cpp
+index 671b309..844817b 100644
+--- a/codeJK2/game/g_main.cpp
++++ b/codeJK2/game/g_main.cpp
+@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ #include "g_functions.h"
+ #include "Q3_Interface.h"
+ #include "g_nav.h"
++#include "valoutcast/vo_bridge.h"
+ #include "g_roff.h"
+ #include "g_navigator.h"
+ #include "b_local.h"
+@@ -620,6 +621,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
+ 	g_qbLoadTransition = qbLoadTransition;
+ 
+ 	gi.Printf ("------- Game Initialization -------\n");
++	VO_Init();
+ 	gi.Printf ("gamename: %s\n", JK_VERSION);
+ 	gi.Printf ("gamedate: %s\n", SOURCE_DATE);
+ 
+@@ -737,6 +739,7 @@ ShutdownGame
+ */
+ void ShutdownGame( void ) {
+ 	gi.Printf ("==== ShutdownGame ====\n");
++	VO_Shutdown();
+ 
+ 	gi.Printf ("... ICARUS_Shutdown\n");
+ 	ICARUS_Shutdown ();	//Shut ICARUS down
+@@ -1261,6 +1264,8 @@ void G_RunFrame( int levelTime ) {
+ 	navTime = 0;
+ #endif//	AI_TIMERS
+ 
++	VO_Frame();
++
+ 	level.framenum++;
+ 	level.previousTime = level.time;
+ 	level.time = levelTime;
