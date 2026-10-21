@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+build/
+dist/
+out/
+*.o
+*.so
+*.dll
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.swp
+
+# Game files and third-party sources (download these yourself)
+third_party/
+lib/
+*.pak
+*.pk3
+
+# Logs and temp
+*.log
+tmp/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
