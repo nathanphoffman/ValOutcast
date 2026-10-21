@@ -30,9 +30,10 @@ We may swap in other games later (for example Skyrim or Doom 2016). So:
 ## Phase 0 status
 
 - Valheim (native Linux) + BepInEx: already installed.
-- OpenJK: built from `third_party/OpenJK`. Run folder is `third_party/jk2run` (symlinks to the build and your Steam game files). Start with `cd third_party/jk2run && ./openjk_sp.x86_64 +set fs_basepath "$PWD"`.
+- OpenJK: built from `third_party/OpenJK`. Run folder is `third_party/jk2run` (symlinks to the build and your Steam game files). Built with the Outcast targets (`buildjo/`, not the Jedi Academy ones). Start with `cd third_party/jk2run && ./openjo_sp.x86_64 +set fs_basepath "$PWD"`.
 - Hello plugin: `valheim/` builds and copies itself into Valheim's `BepInEx/plugins/ValOutcast`.
-- Not yet confirmed: the plugin loading inside Valheim, and an Outcast map loading in OpenJK.
+- **Confirmed:** the hello plugin loads in Valheim (log line `ValOutcast hello: plugin loaded`). Valheim version l-1.0.20, BepInEx 5.4.23.5. Steam launch option must be `./start_game_bepinex.sh %command%`, otherwise BepInEx doesn't load.
+- **Confirmed:** Outcast runs under OpenJK and `map kejim_post` loads (the level intro plays). **Phase 0 is done.**
 
 ## Phases
 
