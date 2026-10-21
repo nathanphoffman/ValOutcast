@@ -404,8 +404,21 @@ void VO_PlayerTrace(trace_t *results, const vec3_t start, const vec3_t mins, con
 	s_realTrace(results, start, mins, maxs, end, passEntityNum, (int)mask, eG2TraceType, useLod);
 
 	static const vec3_t zero = {0, 0, 0};
-	const float *bmins = mins ? mins : zero;
-	const float *bmaxs = maxs ? maxs : zero;
+	// Against the Valheim ground the player's box is made narrower (VO_FIELD_BOX, default 0.7 of its width). The ground is a
+	// grid of square columns, which catch a full-width box on corners; a narrower one slides past trees and rocks.
+	static float boxScale = -1.0f;
+	if (boxScale < 0.0f) {
+		const char *env = getenv("VO_FIELD_BOX");
+		boxScale = env ? (float)atof(env) : 0.7f;
+		if (boxScale <= 0.0f || boxScale > 1.0f) boxScale = 1.0f;
+	}
+	vec3_t narrowMins = {0, 0, 0}, narrowMaxs = {0, 0, 0};
+	if (mins) VectorCopy(mins, narrowMins);
+	if (maxs) VectorCopy(maxs, narrowMaxs);
+	narrowMins[0] *= boxScale; narrowMins[1] *= boxScale;
+	narrowMaxs[0] *= boxScale; narrowMaxs[1] *= boxScale;
+	const float *bmins = mins ? narrowMins : zero;
+	const float *bmaxs = maxs ? narrowMaxs : zero;
 	float fraction, normal[3];
 	if (VoField_Trace(start, bmins, bmaxs, end, &fraction, normal) && fraction < results->fraction) {
 		results->allsolid = qfalse;

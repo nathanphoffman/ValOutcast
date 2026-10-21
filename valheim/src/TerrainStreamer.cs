@@ -17,7 +17,11 @@ namespace ValOutcast
         private const float RefreshEverySeconds = 0.5f;
         private const float ResendSeconds = 5f;     // resend unchanged chunks now and then, in case a packet was lost
         private const float ObjectSearchHeight = 30f;  // how far above the ground to look for objects
-        private const float MinObjectHeight = 0.1f;    // lower than this counts as part of the ground
+        private const float MinObjectHeight = 0.3f;    // lower than this counts as part of the ground (the player walks over it)
+        private const float StepHeight = 0.55f;        // up to this high the player steps onto things (Outcast's step is 0.56 m)
+        // A taller object only blocks if it is solid at body height. Branches, roofs and arches higher up are walked under.
+        private const float BodyLow = 0.6f, BodyHigh = 1.8f;
+        private const float CheckHalfWidth = 0.2f;     // a little less than half a cell, so thin things at a cell's edge do not block it
 
         private class Sent
         {
@@ -127,8 +131,38 @@ namespace ValOutcast
             _workIsNew = isNew;
             if (_objectMask < 0)
             {
-                _objectMask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece");
+                _objectMask = BuildObjectMask();
             }
+        }
+
+        /// <summary>
+        /// The layers that really stop the player, taken from Valheim's own collision rules (so bushes, pickables and other
+        /// things the player walks through do not become walls). Falls back to a fixed list if that finds nothing.
+        /// </summary>
+        private static int BuildObjectMask()
+        {
+            int character = LayerMask.NameToLayer("character");
+            int mask = 0;
+            var names = new List<string>();
+            if (character >= 0)
+            {
+                for (int layer = 0; layer < 32; layer++)
+                {
+                    string name = LayerMask.LayerToName(layer);
+                    if (string.IsNullOrEmpty(name)) continue;
+                    if (name.StartsWith("character") || name == "terrain" || name == "Water" || name == "WaterVolume" || name == "UI" || name == "ghost") continue;
+                    if (Physics.GetIgnoreLayerCollision(character, layer)) continue;
+                    mask |= 1 << layer;
+                    names.Add(name);
+                }
+            }
+            if (mask == 0)
+            {
+                mask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece");
+                names.Add("(fixed list)");
+            }
+            Plugin.LogMessage("terrain: objects that block the player are on layers " + string.Join(", ", names));
+            return mask;
         }
 
         /// <summary>Measures cells of the current chunk until the time budget runs out or the chunk is done.</summary>
@@ -155,7 +189,9 @@ namespace ValOutcast
                     if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, ObjectSearchHeight, _objectMask, QueryTriggerInteraction.Ignore)
                         && hit.point.y > ground + MinObjectHeight)
                     {
-                        top = hit.point.y;
+                        // Low things are stepped onto. Taller ones only count if something solid is at body height here.
+                        bool low = hit.point.y <= ground + StepHeight;
+                        if (low || SolidAtBodyHeight(w, ground)) top = hit.point.y;
                     }
                     float wireY = PlayerFollow.WorldYToWireY(top);
                     h = (short)Mathf.Clamp(Mathf.RoundToInt(wireY * VoLink.HeightUnitsPerM), -32767, 32767);
@@ -181,6 +217,13 @@ namespace ValOutcast
                 sent.Hash = _workHash;
             }
             _working = false;
+        }
+
+        private bool SolidAtBodyHeight(Vector3 w, float ground)
+        {
+            float half = (BodyHigh - BodyLow) * 0.5f;
+            var center = new Vector3(w.x, ground + BodyLow + half, w.z);
+            return Physics.CheckBox(center, new Vector3(CheckHalfWidth, half, CheckHalfWidth), Quaternion.identity, _objectMask, QueryTriggerInteraction.Ignore);
         }
 
         private void ForgetFarChunks(int pcx, int pcz)
