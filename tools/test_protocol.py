@@ -46,6 +46,9 @@ assert vo.decode_input(golden["input"][8:]) == (3, 1.0, -1.0, 0.0, 0.5, -0.5, 4)
 assert vo.encode_world_context(11, (0.0, 0.8, 0.6), (1.0, 0.9, 0.5), (0.25, 0.5, 0.75)) == golden["world_context"]
 assert vo.decode_world_context(golden["world_context"][8:]) == ((0.0, 0.800000011920929, 0.6000000238418579), (1.0, 0.8999999761581421, 0.5), (0.25, 0.5, 0.75))
 assert vo.decode_world_context(b"\x00" * 10) is None
+assert vo.encode_hit_world(12, (1, 2, 3), (0, 0, -1), 25.0, 1) == golden["hit_world"]
+assert vo.decode_hit_world(golden["hit_world"][8:]) == ((1.0, 2.0, 3.0), (0.0, 0.0, -1.0), 25.0, 1)
+assert vo.decode_hit_world(b"\x00") is None
 assert vo.decode_hit_actor(b"\x00") is None and vo.decode_input(b"") is None
 
 logs = []

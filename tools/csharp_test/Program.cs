@@ -46,6 +46,10 @@ class Program
         Check(VoLink.EncodePlayerHurt(9, 10f, new float[] { 1, 0, 0 }, 42).AsSpan().SequenceEqual(Golden("player_hurt")), "player_hurt bytes");
         Check(VoLink.EncodeInput(10, 3, 1f, -1f, 0f, 0.5f, -0.5f, 4).AsSpan().SequenceEqual(Golden("input")), "input bytes");
         Check(VoLink.EncodeWorldContext(11, new float[] { 0f, 0.8f, 0.6f }, new float[] { 1f, 0.9f, 0.5f }, new float[] { 0.25f, 0.5f, 0.75f }).AsSpan().SequenceEqual(Golden("world_context")), "world_context bytes");
+        Check(VoLink.EncodeHitWorld(12, new float[] { 1, 2, 3 }, new float[] { 0, 0, -1 }, 25f, 1).AsSpan().SequenceEqual(Golden("hit_world")), "hit_world bytes");
+        var worldBytes = Golden("hit_world");
+        Check(VoLink.DecodeHitWorld(worldBytes, worldBytes.Length, out var worldMsg) && worldMsg.PosZ == 3f && worldMsg.DirZ == -1f && worldMsg.Damage == 25f && worldMsg.Kind == 1, "hit_world decode");
+        Check(!VoLink.DecodeHitWorld(worldBytes, 20, out _), "hit_world short");
         var hitBytes = Golden("hit_actor");
         Check(VoLink.DecodeHitActor(hitBytes, hitBytes.Length, out var hitMsg) && hitMsg.Id == 7 && hitMsg.Damage == 25f && hitMsg.DirZ == -1f, "hit_actor decode");
         Check(!VoLink.DecodeHitActor(hitBytes, 10, out _), "hit_actor short");

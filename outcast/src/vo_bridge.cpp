@@ -389,6 +389,24 @@ int VO_PointContents(const vec3_t point, int passEntityNum)
 	return contents & (CONTENTS_BODY | CONTENTS_CORPSE);   // only creatures and bodies, not the level's own volumes
 }
 
+void VO_ReportWorldHit(const vec3_t pos, const vec3_t dir, float damage, int kind)
+{
+	// Only over Valheim ground: elsewhere the "world" is the hidden Outcast level and means nothing to Valheim.
+	if (!s_link.connected || !s_active || !s_playerOnField) return;
+	if (kind == 1) {
+		// The lightsaber touches the same spot every frame of a swing: one hit now and then, like a blow.
+		static uint32_t lastSaberHitMs = 0;
+		const uint32_t now = VO_NowMs();
+		if (now - lastSaberHitMs < 250) return;
+		lastSaberHitMs = now;
+	}
+	float wirePos[3], wireDir[3];
+	VO_ToWire(pos, wirePos, UNITS_PER_METER);
+	VO_ToWire(dir, wireDir, 1.0f);
+	if (getenv("VO_DEBUG_BOLTS")) gi.Printf("ValOutcast: hit the world (%s) at %.1f %.1f %.1f, damage %.0f\n", kind == 1 ? "saber" : "shot", wirePos[0], wirePos[1], wirePos[2], damage);
+	vo_link_send_hit_world(&s_link, wirePos, wireDir, damage, kind);
+}
+
 void VO_PlayerTrace(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end,
                     const int passEntityNum, const int contentMask, const EG2_Collision eG2TraceType, const int useLod)
 {

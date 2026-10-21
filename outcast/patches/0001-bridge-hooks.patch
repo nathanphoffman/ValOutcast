@@ -560,7 +560,7 @@ index 671b309..844817b 100644
  	level.previousTime = level.time;
  	level.time = levelTime;
 diff --git a/codeJK2/game/g_missile.cpp b/codeJK2/game/g_missile.cpp
-index aa8d6c7..ecba92f 100644
+index aa8d6c7..d1dad5f 100644
 --- a/codeJK2/game/g_missile.cpp
 +++ b/codeJK2/game/g_missile.cpp
 @@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -571,10 +571,26 @@ index aa8d6c7..ecba92f 100644
  
  #include "g_local.h"
  #include "g_functions.h"
-@@ -553,6 +554,12 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace, int hitLoc=HL_NONE )
+@@ -547,12 +548,28 @@ static void G_MissileAddAlerts( gentity_t *ent )
+ }
+ 
+ //------------------------------------------------------
++// ValOutcast: see vo_bridge.cpp
++extern void VO_ReportWorldHit( const vec3_t pos, const vec3_t dir, float damage, int kind );
++
+ void G_MissileImpact( gentity_t *ent, trace_t *trace, int hitLoc=HL_NONE )
+ {
+ 	gentity_t		*other;
  	vec3_t			diff;
  
  	other = &g_entities[trace->entityNum];
++	if ( ent->owner && ent->owner->s.number == 0 && trace->entityNum == ENTITYNUM_WORLD )
++	{	// ValOutcast: the player's shot hit the world (Valheim ground, trees, rocks): tell the world side
++		vec3_t blowDir;
++		VectorCopy( ent->s.pos.trDelta, blowDir );
++		VectorNormalize( blowDir );
++		VO_ReportWorldHit( trace->endpos, blowDir, (float)ent->damage, 0 );
++	}
 +	if ( getenv( "VO_DEBUG_BOLTS" ) && ent->owner && ent->owner->s.number == 0 )
 +	{
 +		gi.Printf( "BOLT hit entity %d (%s) contents 0x%x, trace contents 0x%x, at (%.0f %.0f %.0f), %.0f units from the player\n", trace->entityNum,
@@ -651,6 +667,34 @@ index 4fb25bb..d96dce1 100644
  	if( !lead_in ) //&& ent->s.number != 0
  	{//Not players or melee
  		if( ent->client )
+diff --git a/codeJK2/game/wp_saber.cpp b/codeJK2/game/wp_saber.cpp
+index 04c5aa2..b690d3d 100644
+--- a/codeJK2/game/wp_saber.cpp
++++ b/codeJK2/game/wp_saber.cpp
+@@ -1450,6 +1450,9 @@ void WP_SaberKnockaway( gentity_t *attacker, trace_t *tr )
+ 
+ #define SABER_COLLISION_DIST 6//was 2//was 4//was 8//was 16
+ extern qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold = 0.0f );
++// ValOutcast: see vo_bridge.cpp
++extern void VO_ReportWorldHit( const vec3_t pos, const vec3_t dir, float damage, int kind );
++
+ qboolean WP_SaberDamageForTrace( int ignore, vec3_t start, vec3_t end, float dmg,
+ 								vec3_t bladeDir, qboolean noGhoul, int attackStrength,
+ 								qboolean extrapolate = qtrue )
+@@ -1513,6 +1516,13 @@ qboolean WP_SaberDamageForTrace( int ignore, vec3_t start, vec3_t end, float dmg
+ 
+ 	if ( tr.entityNum == ENTITYNUM_WORLD )
+ 	{
++		if ( !attacker->s.number )
++		{	// ValOutcast: the player's blade hit the world (Valheim ground, trees, rocks): tell the world side (one blow's worth of damage)
++			vec3_t blowDir;
++			VectorSubtract( end2, start, blowDir );
++			VectorNormalize( blowDir );
++			VO_ReportWorldHit( tr.endpos, blowDir, 25.0f, 1 );
++		}
+ 		return qtrue;
+ 	}
+ 
 diff --git a/shared/sdl/sdl_sound.cpp b/shared/sdl/sdl_sound.cpp
 index 45e5a88..71fedd4 100644
 --- a/shared/sdl/sdl_sound.cpp

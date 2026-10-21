@@ -91,6 +91,12 @@ int main(int argc, char **argv)
 		n = golden("hit_actor", want, 64);
 		check(n > 0 && vo_encode_hit_actor(got, 8, 7, 25.0f, dir) == n && memcmp(got, want, n) == 0, "hit_actor bytes");
 
+		{
+			const float wpos[3] = {1, 2, 3}, wdir[3] = {0, 0, -1};
+			n = golden("hit_world", want, 64);
+			check(n > 0 && vo_encode_hit_world(got, 12, wpos, wdir, 25.0f, 1) == n && memcmp(got, want, n) == 0, "hit_world bytes");
+		}
+
 		h.damage = 10; h.dir[0] = 1; h.dir[1] = 0; h.dir[2] = 0; h.source = 42;
 		n = golden("player_hurt", want, 64);
 		check(n > 0 && vo_encode_player_hurt(got, 9, &h) == n && memcmp(got, want, n) == 0, "player_hurt bytes");

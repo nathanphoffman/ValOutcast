@@ -11,6 +11,7 @@ golden = {
     "actor_upsert": vo.encode_actor_upsert(6, 7, (1.0, 2.0, 3.0), 0.5, 2.0, 200, 1),
     "actor_remove": vo.encode_actor_remove(7, 7),
     "hit_actor": vo.encode_hit_actor(8, 7, 25.0, (0.0, 0.0, -1.0)),
+    "hit_world": vo.encode_hit_world(12, (1.0, 2.0, 3.0), (0.0, 0.0, -1.0), 25.0, 1),
     "player_hurt": vo.encode_player_hurt(9, 10.0, (1.0, 0.0, 0.0), 42),
     "input": vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5, 4),
     "world_context": vo.encode_world_context(11, (0.0, 0.8, 0.6), (1.0, 0.9, 0.5), (0.25, 0.5, 0.75)),

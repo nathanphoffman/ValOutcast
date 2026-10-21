@@ -53,6 +53,17 @@ class Program
         // Harmony patches
         Method("Player", "FixedUpdate", 0);
         Method("Player", "TakeInput", 0);
+        Method("Player", "Interact", 3);
+        Method("Player", "GetHoverObject", 0);
+        Type("IDestructible");
+        Type("WearNTear");
+        Type("Container");
+        Type("CraftingStation");
+        Type("Sign");
+        Type("Trader");
+        Field("HitData", "m_hitCollider");
+        Field("HitData", "m_toolTier");
+        Method("ZNetScene", "GetPrefab", 1);
         Method("InventoryGui", "Show");
         Method("ZInput", "GetButtonDown", 1);
         Method("ZInput", "GetMouseScrollWheel", 0);

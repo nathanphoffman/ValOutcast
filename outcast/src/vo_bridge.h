@@ -21,4 +21,8 @@ int VO_PointContents(const vec3_t point, int passEntityNum);
 // it replaces the keyboard and mouse state in the cmd.
 void VO_ModifyUserCmd(gentity_t *ent, usercmd_t *ucmd);
 
+// The player's shot or lightsaber hit the world itself (not a creature) at pos, blow direction dir (Outcast space).
+// kind: 0 = shot, 1 = lightsaber. Goes to the world side so it can damage whatever stands there (trees, rocks).
+void VO_ReportWorldHit(const vec3_t pos, const vec3_t dir, float damage, int kind);
+
 #endif

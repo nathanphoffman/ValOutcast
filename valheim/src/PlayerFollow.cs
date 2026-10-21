@@ -63,6 +63,13 @@ namespace ValOutcast
             return new Vector3(u.x, u.y, -u.z);
         }
 
+        /// <summary>A point in the player side's wire coordinates to the Valheim world.</summary>
+        public static Vector3 WireToWorld(Vector3 wire)
+        {
+            Vector3 u = new Vector3(wire.x, wire.y, -wire.z);
+            return _anchorWorld + (u - _anchorWire);
+        }
+
         /// <summary>Wire X and Z of a point to the Valheim world X and Z (Y is left at 0).</summary>
         public static Vector3 WireToWorldXZ(float wireX, float wireZ)
         {

@@ -21,6 +21,7 @@ extern "C" {
 #define VO_MSG_PLAYER_HURT 9
 #define VO_MSG_INPUT 10
 #define VO_MSG_WORLD_CONTEXT 11
+#define VO_MSG_HIT_WORLD 12
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -107,6 +108,11 @@ int vo_encode_world_context(uint8_t *out, uint32_t seq, const vo_world *w);
 int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w);
 /* Sends a HitActor if connected. */
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);
+
+/* HitWorld: the player side hit the world itself (not a creature) at pos (meters), blow direction dir (unit vector), with damage
+ * in its own points. kind: 0 = shot, 1 = lightsaber. 40 bytes. */
+int vo_encode_hit_world(uint8_t *out, uint32_t seq, const float pos[3], const float dir[3], float damage, int kind);
+void vo_link_send_hit_world(vo_link *link, const float pos[3], const float dir[3], float damage, int kind);
 /* Returns the message type, or -1 if the packet is not valid. */
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out);
 

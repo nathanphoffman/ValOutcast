@@ -18,7 +18,7 @@ namespace ValOutcast
             return ZInput.GetButton(name);
         }
 
-        private static bool MenuOpen()
+        internal static bool MenuOpen()
         {
             return Menu.IsVisible()
                 || Console.IsVisible()

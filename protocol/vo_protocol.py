@@ -17,6 +17,7 @@ MSG_HIT_ACTOR = 8
 MSG_PLAYER_HURT = 9
 MSG_INPUT = 10
 MSG_WORLD_CONTEXT = 11
+MSG_HIT_WORLD = 12
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -102,6 +103,18 @@ def decode_hit_actor(payload):
         return None
     v = struct.unpack_from("<I4f", payload)
     return v[0], v[1], v[2:5]
+
+
+def encode_hit_world(seq, position, direction, damage, kind):
+    return _HEADER.pack(MAGIC, VERSION, MSG_HIT_WORLD, seq) + struct.pack("<7fB3x", *position, *direction, damage, kind)
+
+
+def decode_hit_world(payload):
+    """Return (position, direction, damage, kind) or None."""
+    if len(payload) < 32:
+        return None
+    v = struct.unpack_from("<7fB", payload)
+    return v[0:3], v[3:6], v[6], v[7]
 
 
 def encode_player_hurt(seq, damage, direction, source):
@@ -223,7 +236,7 @@ class Link:
                     self.player_state_ms = now
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
-                MSG_HIT_ACTOR: decode_hit_actor, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
+                MSG_HIT_ACTOR: decode_hit_actor, MSG_HIT_WORLD: decode_hit_world, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

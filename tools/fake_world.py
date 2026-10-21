@@ -4,6 +4,7 @@
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
          --noactors  leave out the two wandering creatures (they soak up shots fired near the start)
          --turnrate D  degrees per input message for --turn (default 0.5, 60 messages a second)
+         --ring M  radius of the ring wall in meters (default 6; use 1.6 to put the wall within reach of the lightsaber)
          --near   put the two creatures about 1.5 m from the start (within reach of the lightsaber)
          --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
@@ -24,8 +25,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "protocol"))
 import vo_protocol as vo
 
-RING_INNER_M = 6.0
-RING_OUTER_M = 7.0
+RING_INNER_M = float(sys.argv[sys.argv.index("--ring") + 1]) if "--ring" in sys.argv else 6.0
+RING_OUTER_M = RING_INNER_M + 1.0
 WALL_M = 3.0
 RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
@@ -139,6 +140,8 @@ try:
         for kind, value in link.inbox:
             if kind == vo.MSG_HIT_ACTOR:
                 print("[fake_world] HitActor id=%d damage=%.0f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
+            if kind == vo.MSG_HIT_WORLD:
+                print("[fake_world] HitWorld kind=%d damage=%.0f at (%.2f, %.2f, %.2f)" % (value[3], value[2], *value[0]), flush=True)
         link.inbox.clear()
         time.sleep(0.005)
 except KeyboardInterrupt:

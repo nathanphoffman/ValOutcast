@@ -23,10 +23,12 @@ namespace ValOutcast
         private readonly HudHider _hud = new HudHider();
         private readonly WorldLight _light = new WorldLight();
         private readonly TestSpawner _spawner = new TestSpawner();
+        private readonly WorldHits _worldHits = new WorldHits();
+        private readonly Interactor _interactor = new Interactor();
         private PerfStats _perf;
 
         // A part that throws is switched off after logging once, so one bug can't flood the log or stop the others.
-        private bool _lightOk = true, _hudOk = true, _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
+        private bool _worldHitsOk = true, _interactOk = true, _lightOk = true, _hudOk = true, _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
 
         private void Awake()
         {
@@ -84,6 +86,8 @@ namespace ValOutcast
             Run(ref _followOk, "follow", () => PlayerFollow.Tick(Player.m_localPlayer));
             Run(ref _streamerOk, "terrain", () => _streamer.Update(Link));
             Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
+            Run(ref _worldHitsOk, "worldhits", () => _worldHits.Update(Link));
+            Run(ref _interactOk, "interact", () => _interactor.Update());
             _spawner.Update();
             Run(ref _lightOk, "light", () => _light.Update(Link));
             Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && Player.m_localPlayer != null));

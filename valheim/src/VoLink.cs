@@ -20,6 +20,7 @@ namespace ValOutcast
         public const byte MsgActorUpsert = 6;
         public const byte MsgActorRemove = 7;
         public const byte MsgHitActor = 8;
+        public const byte MsgHitWorld = 12;
         public const byte MsgPlayerHurt = 9;
         public const byte MsgInput = 10;
         public const byte MsgWorldContext = 11;
@@ -50,6 +51,16 @@ namespace ValOutcast
         }
 
         public readonly Queue<HitActorMsg> HitActors = new Queue<HitActorMsg>();
+
+        /// <summary>The player side hit the world itself (a tree, a rock, the ground) rather than a creature. Positions are wire space.</summary>
+        public struct HitWorldMsg
+        {
+            public float PosX, PosY, PosZ;
+            public float DirX, DirY, DirZ;
+            public float Damage;
+            public byte Kind;   // 0 = shot, 1 = lightsaber
+        }
+        public readonly Queue<HitWorldMsg> HitWorlds = new Queue<HitWorldMsg>();
 
         /// <summary>Newest PlayerState (wire coordinates), valid when HasPlayerState is true.</summary>
         public float[] StatePos = new float[3];
@@ -175,6 +186,17 @@ namespace ValOutcast
             return b;
         }
 
+        public static byte[] EncodeHitWorld(uint seq, float[] pos, float[] dir, float damage, byte kind)
+        {
+            var b = new byte[40];
+            WriteHeader(b, MsgHitWorld, seq);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(pos[i]).CopyTo(b, 8 + 4 * i);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(dir[i]).CopyTo(b, 20 + 4 * i);
+            BitConverter.GetBytes(damage).CopyTo(b, 32);
+            b[36] = kind;
+            return b;
+        }
+
         public static byte[] EncodePlayerHurt(uint seq, float damage, float[] dir, uint source)
         {
             var b = new byte[28];
@@ -228,6 +250,22 @@ namespace ValOutcast
             msg.DirX = BitConverter.ToSingle(data, 16);
             msg.DirY = BitConverter.ToSingle(data, 20);
             msg.DirZ = BitConverter.ToSingle(data, 24);
+            return true;
+        }
+
+        /// <summary>Reads a HitWorld packet. Returns false if it is too short.</summary>
+        public static bool DecodeHitWorld(byte[] data, int len, out HitWorldMsg msg)
+        {
+            msg = default;
+            if (len < 40) return false;
+            msg.PosX = BitConverter.ToSingle(data, 8);
+            msg.PosY = BitConverter.ToSingle(data, 12);
+            msg.PosZ = BitConverter.ToSingle(data, 16);
+            msg.DirX = BitConverter.ToSingle(data, 20);
+            msg.DirY = BitConverter.ToSingle(data, 24);
+            msg.DirZ = BitConverter.ToSingle(data, 28);
+            msg.Damage = BitConverter.ToSingle(data, 32);
+            msg.Kind = data[36];
             return true;
         }
 
@@ -307,6 +345,10 @@ namespace ValOutcast
                 if (type == MsgHitActor && DecodeHitActor(_recvBuf, n, out HitActorMsg hit))
                 {
                     if (HitActors.Count < 256) HitActors.Enqueue(hit);
+                }
+                if (type == MsgHitWorld && DecodeHitWorld(_recvBuf, n, out HitWorldMsg hitWorld))
+                {
+                    if (HitWorlds.Count < 256) HitWorlds.Enqueue(hitWorld);
                 }
                 if (type == MsgPlayerState && n >= 32)
                 {
