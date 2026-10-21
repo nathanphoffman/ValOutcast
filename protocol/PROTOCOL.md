@@ -31,6 +31,19 @@ Packets with the wrong magic or version, or too short, are dropped silently.
 | 3 | PlayerState | 6 x f32: position x y z (meters), look direction x y z (unit vector). 24 bytes. Player side to world side. Position is the **feet** (bottom center of the player). |
 | 4 | CollisionSection | i32 chunkX, i32 chunkZ, then 256 x i16 heights (row by row, 16 rows of 16). 520 bytes. World side to player side. |
 | 5 | CollisionReset | no payload. World side to player side: forget all collision chunks (the coordinate mapping changed). |
+| 6 | ActorUpsert | u32 id, 3 x f32 feet position (meters), f32 radius (m), f32 height (m), u8 health 0-255 (255 = full), u8 flags (bit 0 = hostile), u16 zero. 28 bytes. World side to player side, about 10 times a second per creature. |
+| 7 | ActorRemove | u32 id. 4 bytes. World side to player side. |
+| 8 | HitActor | u32 id, f32 damage (the player side's own damage points), 3 x f32 direction of the blow (unit vector, wire space). 20 bytes. Player side to world side. |
+| 9 | PlayerHurt | f32 damage (the world side's own damage points), 3 x f32 direction the blow travels (unit vector, wire space), u32 source id (0 = unknown). 20 bytes. World side to player side. |
+| 10 | Input | u32 buttons, f32 forward, f32 right, f32 up (each -1..1), f32 look yaw change, f32 look pitch change (degrees since last packet; positive yaw turns left, positive pitch looks up). 24 bytes. World side to player side. |
+
+Input buttons: bit 0 primary attack, bit 1 secondary attack, bit 2 use. Input is sent about 60 times a second while the world side's window has the player's attention (no menu open). If nothing arrives for 500 ms the player side goes back to reading its own keyboard.
+
+Damage numbers are each game's own points. Each side scales what it receives to its own scale (see the adapters; today Outcast turns Valheim damage into Outcast damage by multiplying by 4, and Valheim takes Outcast damage as is).
+
+### Creatures
+
+The world side sends the nearby creatures (within about 40 m) as ActorUpsert. The player side makes an invisible box for each one, so the player can walk into it and hit it. Each creature is identified by its id. An id the player side has not heard about for 1 s is dropped. The player side reports damage with HitActor and keeps the box's own health full, so the world side decides who is alive.
 
 ### Teleports
 

@@ -27,6 +27,24 @@ assert vo.decode(b"\x00\x01") is None
 assert vo.decode(b"XX" + HELLO[2:]) is None
 assert vo.decode(HELLO[:2] + b"\x09" + HELLO[3:]) is None
 
+# golden.txt: shared test packets for the newer messages
+golden = {}
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "protocol", "golden.txt")) as f:
+    for line in f:
+        if line.strip() and not line.startswith("#"):
+            name, hexed = line.split()
+            golden[name] = bytes.fromhex(hexed)
+assert vo.encode_actor_upsert(6, 7, (1, 2, 3), 0.5, 2.0, 200, 1) == golden["actor_upsert"]
+assert vo.decode_actor_upsert(golden["actor_upsert"][8:]) == (7, (1.0, 2.0, 3.0), 0.5, 2.0, 200, 1)
+assert vo.encode_actor_remove(7, 7) == golden["actor_remove"] and vo.decode_actor_remove(golden["actor_remove"][8:]) == 7
+assert vo.encode_hit_actor(8, 7, 25.0, (0, 0, -1)) == golden["hit_actor"]
+assert vo.decode_hit_actor(golden["hit_actor"][8:]) == (7, 25.0, (0.0, 0.0, -1.0))
+assert vo.encode_player_hurt(9, 10.0, (1, 0, 0), 42) == golden["player_hurt"]
+assert vo.decode_player_hurt(golden["player_hurt"][8:]) == (10.0, (1.0, 0.0, 0.0), 42)
+assert vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5) == golden["input"]
+assert vo.decode_input(golden["input"][8:]) == (3, 1.0, -1.0, 0.0, 0.5, -0.5)
+assert vo.decode_hit_actor(b"\x00") is None and vo.decode_input(b"") is None
+
 logs = []
 world = vo.Link(vo.ROLE_WORLD, log=logs.append)
 player = vo.Link(vo.ROLE_PLAYER, log=logs.append)

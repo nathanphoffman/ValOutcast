@@ -13,6 +13,8 @@
     <Reference Include="UnityEngine"><HintPath>$(ValheimDir)/valheim_Data/Managed/UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(ValheimDir)/valheim_Data/Managed/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(ValheimDir)/valheim_Data/Managed/UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="assembly_utils"><HintPath>$(ValheimDir)/valheim_Data/Managed/assembly_utils.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ValheimDir)/valheim_Data/Managed/UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="assembly_valheim"><HintPath>$(ValheimDir)/valheim_Data/Managed/assembly_valheim.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <!-- Copy the built plugin into Valheim's BepInEx/plugins folder -->

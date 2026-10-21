@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -16,6 +17,15 @@ namespace ValOutcast
         public const int PlayerStateTimeoutMs = 500;
         public const byte MsgCollisionSection = 4;
         public const byte MsgCollisionReset = 5;
+        public const byte MsgActorUpsert = 6;
+        public const byte MsgActorRemove = 7;
+        public const byte MsgHitActor = 8;
+        public const byte MsgPlayerHurt = 9;
+        public const byte MsgInput = 10;
+        public const uint ButtonAttack = 1;
+        public const uint ButtonAltAttack = 2;
+        public const uint ButtonUse = 4;
+        public const byte ActorHostile = 1;
         public const int ChunkCells = 16;
         public const float CellSizeM = 0.5f;
         public const int HeightUnitsPerM = 32;
@@ -30,10 +40,22 @@ namespace ValOutcast
 
         public bool Connected { get; private set; }
 
+        /// <summary>The player side hit a creature. Drained by the game code every frame.</summary>
+        public struct HitActorMsg
+        {
+            public uint Id;
+            public float Damage;
+            public float DirX, DirY, DirZ;
+        }
+
+        public readonly Queue<HitActorMsg> HitActors = new Queue<HitActorMsg>();
+
         /// <summary>Newest PlayerState (wire coordinates), valid when HasPlayerState is true.</summary>
         public float[] StatePos = new float[3];
         public float[] StateLook = new float[3];
         public bool HasPlayerState;
+        /// <summary>Goes up by one for every PlayerState that arrives.</summary>
+        public int StateSerial;
         /// <summary>True while PlayerState packets are arriving (newer than PlayerStateTimeoutMs).</summary>
         public bool PlayerStateFresh => Connected && HasPlayerState && _clock.ElapsedMilliseconds - _lastState <= PlayerStateTimeoutMs;
 
@@ -121,6 +143,99 @@ namespace ValOutcast
             Send(EncodeCollisionReset(++_seq), _clock.ElapsedMilliseconds);
         }
 
+        public static byte[] EncodeActorUpsert(uint seq, uint id, float[] pos, float radius, float height, byte hp, byte flags)
+        {
+            var b = new byte[36];
+            WriteHeader(b, MsgActorUpsert, seq);
+            BitConverter.GetBytes(id).CopyTo(b, 8);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(pos[i]).CopyTo(b, 12 + 4 * i);
+            BitConverter.GetBytes(radius).CopyTo(b, 24);
+            BitConverter.GetBytes(height).CopyTo(b, 28);
+            b[32] = hp;
+            b[33] = flags;
+            return b;
+        }
+
+        public static byte[] EncodeActorRemove(uint seq, uint id)
+        {
+            var b = new byte[12];
+            WriteHeader(b, MsgActorRemove, seq);
+            BitConverter.GetBytes(id).CopyTo(b, 8);
+            return b;
+        }
+
+        public static byte[] EncodeHitActor(uint seq, uint id, float damage, float[] dir)
+        {
+            var b = new byte[28];
+            WriteHeader(b, MsgHitActor, seq);
+            BitConverter.GetBytes(id).CopyTo(b, 8);
+            BitConverter.GetBytes(damage).CopyTo(b, 12);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(dir[i]).CopyTo(b, 16 + 4 * i);
+            return b;
+        }
+
+        public static byte[] EncodePlayerHurt(uint seq, float damage, float[] dir, uint source)
+        {
+            var b = new byte[28];
+            WriteHeader(b, MsgPlayerHurt, seq);
+            BitConverter.GetBytes(damage).CopyTo(b, 8);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(dir[i]).CopyTo(b, 12 + 4 * i);
+            BitConverter.GetBytes(source).CopyTo(b, 24);
+            return b;
+        }
+
+        public static byte[] EncodeInput(uint seq, uint buttons, float forward, float right, float up, float yaw, float pitch)
+        {
+            var b = new byte[32];
+            WriteHeader(b, MsgInput, seq);
+            BitConverter.GetBytes(buttons).CopyTo(b, 8);
+            BitConverter.GetBytes(forward).CopyTo(b, 12);
+            BitConverter.GetBytes(right).CopyTo(b, 16);
+            BitConverter.GetBytes(up).CopyTo(b, 20);
+            BitConverter.GetBytes(yaw).CopyTo(b, 24);
+            BitConverter.GetBytes(pitch).CopyTo(b, 28);
+            return b;
+        }
+
+        /// <summary>Reads a HitActor packet. Returns false if it is too short.</summary>
+        public static bool DecodeHitActor(byte[] data, int len, out HitActorMsg msg)
+        {
+            msg = default;
+            if (len < 28) return false;
+            msg.Id = BitConverter.ToUInt32(data, 8);
+            msg.Damage = BitConverter.ToSingle(data, 12);
+            msg.DirX = BitConverter.ToSingle(data, 16);
+            msg.DirY = BitConverter.ToSingle(data, 20);
+            msg.DirZ = BitConverter.ToSingle(data, 24);
+            return true;
+        }
+
+        private void SendPacket(byte[] packet)
+        {
+            if (Connected) Send(packet, _clock.ElapsedMilliseconds);
+        }
+
+        /// <summary>Position is the creature's feet in wire space (meters). Does nothing if not connected.</summary>
+        public void SendActorUpsert(uint id, float[] pos, float radius, float height, byte hp, byte flags)
+        {
+            if (Connected) SendPacket(EncodeActorUpsert(++_seq, id, pos, radius, height, hp, flags));
+        }
+
+        public void SendActorRemove(uint id)
+        {
+            if (Connected) SendPacket(EncodeActorRemove(++_seq, id));
+        }
+
+        public void SendPlayerHurt(float damage, float[] dir, uint source)
+        {
+            if (Connected) SendPacket(EncodePlayerHurt(++_seq, damage, dir, source));
+        }
+
+        public void SendInput(uint buttons, float forward, float right, float up, float yaw, float pitch)
+        {
+            if (Connected) SendPacket(EncodeInput(++_seq, buttons, forward, right, up, yaw, pitch));
+        }
+
         /// <summary>Reads the 24-byte payload that starts at offset 8.</summary>
         public static void DecodePlayerState(byte[] data, float[] pos, float[] look)
         {
@@ -167,10 +282,15 @@ namespace ValOutcast
                 int type = Decode(_recvBuf, n, out _);
                 if (type < 0) continue;
                 _lastRecv = now;
+                if (type == MsgHitActor && DecodeHitActor(_recvBuf, n, out HitActorMsg hit))
+                {
+                    if (HitActors.Count < 256) HitActors.Enqueue(hit);
+                }
                 if (type == MsgPlayerState && n >= 32)
                 {
                     DecodePlayerState(_recvBuf, StatePos, StateLook);
                     HasPlayerState = true;
+                    StateSerial++;
                     _lastState = now;
                 }
                 if (!Connected)

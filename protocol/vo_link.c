@@ -106,6 +106,101 @@ int vo_decode_collision_section(const uint8_t *payload, int len, int32_t *cx, in
 	return 0;
 }
 
+int vo_encode_actor_upsert(uint8_t *out, uint32_t seq, const vo_actor *a)
+{
+	int i;
+	put_header(out, VO_MSG_ACTOR_UPSERT, seq);
+	put_u32(out + 8, a->id);
+	for (i = 0; i < 3; i++) put_f32(out + 12 + 4 * i, a->pos[i]);
+	put_f32(out + 24, a->radius);
+	put_f32(out + 28, a->height);
+	out[32] = (uint8_t)a->hp;
+	out[33] = (uint8_t)a->flags;
+	out[34] = out[35] = 0;
+	return 36;
+}
+
+int vo_decode_actor_upsert(const uint8_t *payload, int len, vo_actor *a)
+{
+	int i;
+	if (len < 28) return -1;
+	a->id = get_u32(payload);
+	for (i = 0; i < 3; i++) a->pos[i] = get_f32(payload + 4 + 4 * i);
+	a->radius = get_f32(payload + 16);
+	a->height = get_f32(payload + 20);
+	a->hp = payload[24];
+	a->flags = payload[25];
+	return 0;
+}
+
+int vo_encode_actor_remove(uint8_t *out, uint32_t seq, uint32_t id)
+{
+	put_header(out, VO_MSG_ACTOR_REMOVE, seq);
+	put_u32(out + 8, id);
+	return 12;
+}
+
+int vo_decode_actor_remove(const uint8_t *payload, int len, uint32_t *id)
+{
+	if (len < 4) return -1;
+	*id = get_u32(payload);
+	return 0;
+}
+
+int vo_encode_hit_actor(uint8_t *out, uint32_t seq, uint32_t id, float damage, const float dir[3])
+{
+	int i;
+	put_header(out, VO_MSG_HIT_ACTOR, seq);
+	put_u32(out + 8, id);
+	put_f32(out + 12, damage);
+	for (i = 0; i < 3; i++) put_f32(out + 16 + 4 * i, dir[i]);
+	return 28;
+}
+
+int vo_encode_player_hurt(uint8_t *out, uint32_t seq, const vo_hurt *h)
+{
+	int i;
+	put_header(out, VO_MSG_PLAYER_HURT, seq);
+	put_f32(out + 8, h->damage);
+	for (i = 0; i < 3; i++) put_f32(out + 12 + 4 * i, h->dir[i]);
+	put_u32(out + 24, h->source);
+	return 28;
+}
+
+int vo_decode_player_hurt(const uint8_t *payload, int len, vo_hurt *h)
+{
+	int i;
+	if (len < 20) return -1;
+	h->damage = get_f32(payload);
+	for (i = 0; i < 3; i++) h->dir[i] = get_f32(payload + 4 + 4 * i);
+	h->source = get_u32(payload + 16);
+	return 0;
+}
+
+int vo_encode_input(uint8_t *out, uint32_t seq, const vo_input *in)
+{
+	put_header(out, VO_MSG_INPUT, seq);
+	put_u32(out + 8, in->buttons);
+	put_f32(out + 12, in->forward);
+	put_f32(out + 16, in->right);
+	put_f32(out + 20, in->up);
+	put_f32(out + 24, in->yaw);
+	put_f32(out + 28, in->pitch);
+	return 32;
+}
+
+int vo_decode_input(const uint8_t *payload, int len, vo_input *in)
+{
+	if (len < 24) return -1;
+	in->buttons = get_u32(payload);
+	in->forward = get_f32(payload + 4);
+	in->right = get_f32(payload + 8);
+	in->up = get_f32(payload + 12);
+	in->yaw = get_f32(payload + 16);
+	in->pitch = get_f32(payload + 20);
+	return 0;
+}
+
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out)
 {
 	if (len < VO_HEADER_SIZE) return -1;
@@ -146,6 +241,15 @@ void vo_link_send_player_state(vo_link *link, const float pos[3], const float lo
 	int n;
 	if (link->sock < 0 || !link->connected) return;
 	n = vo_encode_player_state(buf, ++link->seq, pos, look);
+	send_to_peer(link, buf, n);
+}
+
+void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3])
+{
+	uint8_t buf[28];
+	int n;
+	if (link->sock < 0 || !link->connected) return;
+	n = vo_encode_hit_actor(buf, ++link->seq, id, damage, dir);
 	send_to_peer(link, buf, n);
 }
 

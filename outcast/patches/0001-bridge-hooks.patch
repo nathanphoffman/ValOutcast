@@ -1,3 +1,126 @@
+diff --git a/code/rd-vanilla/CMakeLists.txt b/code/rd-vanilla/CMakeLists.txt
+index 6c24eb2..4461793 100644
+--- a/code/rd-vanilla/CMakeLists.txt
++++ b/code/rd-vanilla/CMakeLists.txt
+@@ -100,6 +100,7 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
+ 		"${SPDir}/rd-vanilla/qgl.h"
+ 		"${SPDir}/rd-vanilla/tr_arb.cpp"
+ 		"${SPDir}/rd-vanilla/tr_backend.cpp"
++		"${SPDir}/rd-vanilla/vo_overlay.cpp"
+ 		"${SPDir}/rd-vanilla/tr_bsp.cpp"
+ 		"${SPDir}/rd-vanilla/tr_cmds.cpp"
+ 		"${SPDir}/rd-vanilla/tr_curve.cpp"
+diff --git a/code/rd-vanilla/tr_backend.cpp b/code/rd-vanilla/tr_backend.cpp
+index 741bb95..c2b82c9 100644
+--- a/code/rd-vanilla/tr_backend.cpp
++++ b/code/rd-vanilla/tr_backend.cpp
+@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ #include "../server/exe_headers.h"
+ 
+ #include "tr_local.h"
++#include "vo_overlay.h"
+ #include "tr_common.h"
+ 
+ backEndData_t	*backEndData;
+@@ -308,7 +309,7 @@ void GL_State( uint32_t stateBits )
+ 			}
+ 
+ 			qglEnable( GL_BLEND );
+-			qglBlendFunc( srcFactor, dstFactor );
++			VO_BlendFunc( srcFactor, dstFactor );
+ 		}
+ 		else
+ 		{
+@@ -1405,6 +1406,12 @@ const void	*RB_DrawBuffer( const void *data ) {
+ 
+ 	qglDrawBuffer( cmd->buffer );
+ 
++	if ( VO_OverlayEnabled() )
++	{	// overlay mode: every frame starts fully transparent
++		qglClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
++		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
++	}
++	else
+ 		// clear screen for debugging
+ 	if (!( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) && tr.world && tr.refdef.rdflags & RDF_doLAGoggles)
+ 	{
+@@ -1568,6 +1575,8 @@ const void	*RB_SwapBuffers( const void *data ) {
+ 
+     GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
+ 
++	VO_OverlayPublish();
++
+ 	ri.WIN_Present(&window);
+ 
+ 	backEnd.projection2D = qfalse;
+@@ -1586,7 +1595,10 @@ const void	*RB_WorldEffects( const void *data )
+ 	{
+ 		RB_EndSurface();
+ 	}
+-	RB_RenderWorldEffects();
++	if ( !VO_OverlayEnabled() )	// the level's rain and snow belong to a world nobody sees
++	{
++		RB_RenderWorldEffects();
++	}
+ 
+ 	if(tess.shader)
+ 	{
+diff --git a/code/rd-vanilla/tr_world.cpp b/code/rd-vanilla/tr_world.cpp
+index 4a472e2..fd7b8a4 100644
+--- a/code/rd-vanilla/tr_world.cpp
++++ b/code/rd-vanilla/tr_world.cpp
+@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ #include "../server/exe_headers.h"
+ 
+ #include "tr_local.h"
++#include "vo_overlay.h"
+ 
+ /*
+ =================
+@@ -785,7 +786,7 @@ R_AddWorldSurfaces
+ =============
+ */
+ void R_AddWorldSurfaces (void) {
+-	if ( !r_drawworld->integer ) {
++	if ( !r_drawworld->integer || VO_OverlayEnabled() ) {
+ 		return;
+ 	}
+ 
+diff --git a/codeJK2/cgame/cg_ents.cpp b/codeJK2/cgame/cg_ents.cpp
+index bad8c73..4b00000 100644
+--- a/codeJK2/cgame/cg_ents.cpp
++++ b/codeJK2/cgame/cg_ents.cpp
+@@ -2073,12 +2073,30 @@ CG_AddCEntity
+ 
+ ===============
+ */
++// ValOutcast overlay mode (VO_OVERLAY set): only the player and things like missiles and beams are drawn.
++// The level's own people, items, movers and props belong to a world nobody sees.
++static qboolean VO_HideEntity( const centity_t *cent )
++{
++	static int overlay = -1;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	if ( !overlay || cent->currentState.number == 0 ) return qfalse;
++	switch ( cent->currentState.eType ) {
++	case ET_PLAYER: case ET_ITEM: case ET_MOVER: case ET_GENERAL: case ET_THINKER: case ET_CLOUD:
++		return qtrue;
++	default:
++		return qfalse;
++	}
++}
++
+ static void CG_AddCEntity( centity_t *cent )
+ {
+ 	// event-only entities will have been dealt with already
+ 	if ( cent->currentState.eType >= ET_EVENTS ) {
+ 		return;
+ 	}
++	if ( VO_HideEntity( cent ) ) {
++		return;
++	}
+ 
+ 	//we must have restarted the game
+ 	if (!cent->gent)
 diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
 index 2790dc8..6242832 100644
 --- a/codeJK2/game/CMakeLists.txt
@@ -13,7 +136,7 @@ index 2790dc8..6242832 100644
  	"${JK2SPDir}/game/g_misc.cpp"
  	"${JK2SPDir}/game/g_misc_model.cpp"
 diff --git a/codeJK2/game/g_active.cpp b/codeJK2/game/g_active.cpp
-index 7b4f4cd..22589a7 100644
+index 7b4f4cd..f7aec83 100644
 --- a/codeJK2/game/g_active.cpp
 +++ b/codeJK2/game/g_active.cpp
 @@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -24,7 +147,16 @@ index 7b4f4cd..22589a7 100644
  
  #include "g_local.h"
  #include "g_functions.h"
-@@ -2758,7 +2759,7 @@ extern cvar_t	*g_skippingcin;
+@@ -2751,6 +2752,8 @@ extern cvar_t	*g_skippingcin;
+ 	// set up for pmove
+ 	oldEventSequence = client->ps.eventSequence;
+ 
++	VO_ModifyUserCmd( ent, ucmd );
++
+ 	memset( &pm, 0, sizeof(pm) );
+ 
+ 	pm.gent = ent;
+@@ -2758,7 +2761,7 @@ extern cvar_t	*g_skippingcin;
  	pm.cmd = *ucmd;
  //	pm.tracemask = MASK_PLAYERSOLID;	// used differently for navgen
  	pm.tracemask = ent->clipmask;
@@ -70,3 +202,23 @@ index 671b309..844817b 100644
  	level.framenum++;
  	level.previousTime = level.time;
  	level.time = levelTime;
+diff --git a/shared/sdl/sdl_window.cpp b/shared/sdl/sdl_window.cpp
+index 18daa06..7109654 100644
+--- a/shared/sdl/sdl_window.cpp
++++ b/shared/sdl/sdl_window.cpp
+@@ -19,6 +19,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ ===========================================================================
+ */
+ 
++#include <stdlib.h>
+ #include <SDL.h>
+ #include <SDL_syswm.h>
+ #include "qcommon/qcommon.h"
+@@ -516,6 +517,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
+ 			SDL_GL_SetAttribute( SDL_GL_RED_SIZE, perChannelColorBits );
+ 			SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, perChannelColorBits );
+ 			SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, perChannelColorBits );
++			if ( getenv( "VO_OVERLAY" ) ) SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 8 );	// ValOutcast: the picture needs an alpha channel
+ 			SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, testDepthBits );
+ 			SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, testStencilBits );
+ 

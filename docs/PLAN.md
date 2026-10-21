@@ -64,35 +64,37 @@ Each phase ends with something you can run and check. Don't start the next one u
 - **Done when:** walking in Outcast moves the Valheim character the same way.
 
 ### Phase 3: Terrain collision (hardest)
-**Status:** built, tests pass, not yet tried in the real games.
+**Status:** built and tested against a fake world (walls block, ground holds). Not yet seen with real Valheim terrain.
 - Valheim samples ground height (and "something is in the way" for trees, rocks, buildings) on a 0.5 m grid around the player and streams it as 8 m chunks (`CollisionSection`). See `protocol/PROTOCOL.md`.
 - Outcast keeps the chunks (`outcast/src/vo_field.cpp`, unit tested with `tools/test_field.sh`) and wraps the player's movement trace (`VO_PlayerTrace`). Over Valheim ground, the level's own walls and floors are ignored.
-- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), objects are just tall columns (no climbing on them), ground is cut into 0.5 m steps.
-- Test without Valheim: `tools/fake_world.py` makes flat ground inside a 6 m ring wall.
-- Valheim sends ground and object shapes near the player in chunks.
-- Outcast adds them to its collision checks and drops far-away chunks.
-- **Done when:** you can walk on Valheim hills and bump into trees and buildings from the Outcast side.
+- The bridge only switches on when the player is free and standing on the level's floor, and switches off for cutscenes and death. (Turning it on mid-air in an intro made Kyle fall and die, and left a cutscene waiting.)
+- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), objects are just 3 m tall columns (no climbing on them), ground is cut into 0.5 m steps.
+- Test without Valheim: `tools/fake_world.py` makes flat ground inside a 6 m ring wall, and Outcast could not walk out of it.
 
 ### Phase 4: Creatures and combat
-- Each Valheim creature near the player becomes an invisible target in Outcast.
-- Saber hits send HitCreature, and Valheim applies the damage.
-- Creature attacks on the player send PlayerHurt, scaled, and Outcast applies it.
-- **Done when:** you can kill a Greydwarf with a saber and a Greydwarf can kill you.
+**Status:** built. Tested against a fake world: creatures appear as boxes, hits come back, damage kills the player. Not yet tried against real Valheim creatures.
+- Valheim sends creatures within 40 m (`ActorUpsert`, 10 times a second). Outcast makes an invisible box for each (`vo_actor`), so you can walk into it and hit it with anything that hurts entities.
+- Damage taken by a box is sent back (`HitActor`) and the box is healed, so Valheim decides who dies. Valheim turns it into a normal hit on the creature.
+- Hits on the Valheim player are caught, sent to Outcast (`PlayerHurt`) and applied there. Outcast's health is the real one. Valheim damage x4 = Outcast damage. These numbers are guesses and live in `outcast/src/vo_bridge.cpp` (`HURT_SCALE`) and `valheim/src/Combat.cs` (`OutcastToValheim`).
+- Test helpers: `VO_DEBUG_HIT=1` makes the player "hit" the first creature every few seconds.
 
 ### Phase 5: Rendering
-- First version: copy Outcast's frame into a texture or overlay shown in Valheim (slow is fine).
-- Later: faster path (shared GPU memory) if the first version is too slow.
-- **Done when:** you see Outcast's view of the Valheim world on screen at a playable frame rate.
+**Status:** built. Outcast's side confirmed by viewing real frames; Valheim's drawing code is written but not seen on screen yet.
+- Outcast draws only its own things (first-person weapon, saber, effects, HUD) on a transparent background and publishes each frame in shared memory (`/dev/shm/valoutcast_frame`, see `protocol/FRAME.md`). Turned on by `VO_OVERLAY=1` (`tools/run_outcast.sh` does it). The level, its people, rain and props are not drawn.
+- Valheim reads the frame (`FrameReader.cs`, tested against a real frame) and draws it over its own picture (`Overlay.cs`). Its camera is forced into first person while Outcast drives.
+- Inspect a frame without Valheim: `tools/dump_frame.py out.png`.
+- Limits: the overlay has no depth, so Outcast's things always draw on top of Valheim's world (nothing hides behind a Valheim wall). Frames go through the CPU (about 3.7 MB each at 1280x720), which should be fine for now. Keep the Outcast window open and not minimized (a minimized window slows down).
 
 ### Phase 6: World sync and polish
-- Time of day and weather from Valheim to Outcast.
-- Menu and input routing (pause, inventory, escape).
-- Save syncing so loading a save matches both games.
-- **Done when:** a 30-minute play session works without desyncs or crashes.
+**Status:** partly done.
+- Done: Valheim keyboard and mouse drive Outcast (`Input` message, `InputForwarder.cs`). Input stops while any Valheim menu, chat or console is open. Bridge switches itself off in cutscenes and on death.
+- Done: plugin parts switch themselves off after one error instead of flooding the log.
+- Not done, on purpose: time of day and weather sync. Outcast only draws the hands and saber, so there is nothing for it to light yet.
+- Not done: save syncing. Loading a Valheim save does not rewind Outcast (and the reverse).
+- Not done: death and respawn. When the Outcast player dies, Outcast's own death handling runs and Valheim carries on.
 
 ### Phase 7: Release
-- Packaging script in `tools/`, install instructions in the README, known issues list.
-- **Done when:** someone else can install it from the README alone.
+**Status:** basic version. Everything builds from this folder (see the main README). `tools/test_all.sh` runs all tests that need no game.
 
 ## Risks
 
@@ -106,7 +108,7 @@ About 10-20k lines of code. Up to ~30k with GPU rendering and full save sync.
 
 ## Out of scope (for now)
 
-Multiplayer, Discord, Windows-only GPU sharing.
+Multiplayer, Discord, Windows-only GPU sharing, time and weather sync, save syncing, depth sharing between the two pictures.
 
 ## Open questions
 

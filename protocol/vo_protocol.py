@@ -11,6 +11,15 @@ MSG_HEARTBEAT = 2
 MSG_PLAYER_STATE = 3
 MSG_COLLISION_SECTION = 4
 MSG_COLLISION_RESET = 5
+MSG_ACTOR_UPSERT = 6
+MSG_ACTOR_REMOVE = 7
+MSG_HIT_ACTOR = 8
+MSG_PLAYER_HURT = 9
+MSG_INPUT = 10
+BUTTON_ATTACK = 1
+BUTTON_ALT_ATTACK = 2
+BUTTON_USE = 4
+ACTOR_HOSTILE = 1
 CHUNK_CELLS = 16
 CELL_SIZE_M = 0.5
 HEIGHT_UNITS_PER_M = 32
@@ -62,6 +71,61 @@ def encode_collision_reset(seq):
     return _HEADER.pack(MAGIC, VERSION, MSG_COLLISION_RESET, seq)
 
 
+def encode_actor_upsert(seq, actor_id, pos, radius, height, hp, flags):
+    return _HEADER.pack(MAGIC, VERSION, MSG_ACTOR_UPSERT, seq) + struct.pack("<I3f2fBBH", actor_id, *pos, radius, height, hp, flags, 0)
+
+
+def decode_actor_upsert(payload):
+    """Return (id, pos, radius, height, hp, flags) or None."""
+    if len(payload) < 28:
+        return None
+    v = struct.unpack_from("<I3f2fBBH", payload)
+    return v[0], v[1:4], v[4], v[5], v[6], v[7]
+
+
+def encode_actor_remove(seq, actor_id):
+    return _HEADER.pack(MAGIC, VERSION, MSG_ACTOR_REMOVE, seq) + struct.pack("<I", actor_id)
+
+
+def decode_actor_remove(payload):
+    return struct.unpack_from("<I", payload)[0] if len(payload) >= 4 else None
+
+
+def encode_hit_actor(seq, actor_id, damage, direction):
+    return _HEADER.pack(MAGIC, VERSION, MSG_HIT_ACTOR, seq) + struct.pack("<I4f", actor_id, damage, *direction)
+
+
+def decode_hit_actor(payload):
+    """Return (id, damage, direction) or None."""
+    if len(payload) < 20:
+        return None
+    v = struct.unpack_from("<I4f", payload)
+    return v[0], v[1], v[2:5]
+
+
+def encode_player_hurt(seq, damage, direction, source):
+    return _HEADER.pack(MAGIC, VERSION, MSG_PLAYER_HURT, seq) + struct.pack("<4fI", damage, *direction, source)
+
+
+def decode_player_hurt(payload):
+    """Return (damage, direction, source) or None."""
+    if len(payload) < 20:
+        return None
+    v = struct.unpack_from("<4fI", payload)
+    return v[0], v[1:4], v[4]
+
+
+def encode_input(seq, buttons, forward, right, up, yaw, pitch):
+    return _HEADER.pack(MAGIC, VERSION, MSG_INPUT, seq) + struct.pack("<I5f", buttons, forward, right, up, yaw, pitch)
+
+
+def decode_input(payload):
+    """Return (buttons, forward, right, up, yaw, pitch) or None."""
+    if len(payload) < 24:
+        return None
+    return struct.unpack_from("<I5f", payload)
+
+
 def decode(data):
     """Return (type, seq, payload) or None if the packet is not valid."""
     if len(data) < _HEADER.size:
@@ -87,6 +151,7 @@ class Link:
         self.last_recv = 0
         self.player_state = None      # (pos, look) of the newest PlayerState
         self.player_state_ms = 0
+        self.inbox = []               # (type, decoded) for HitActor, PlayerHurt, Input, ActorUpsert, ActorRemove, collision
         self.peer = ("127.0.0.1", PORTS[ROLE_PLAYER if role == ROLE_WORLD else ROLE_WORLD])
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", PORTS[role]))
@@ -114,6 +179,13 @@ class Link:
         self.seq += 1
         self.sock.sendto(encode_collision_section(self.seq, cx, cz, heights), self.peer)
 
+    def send_raw(self, make_packet):
+        """Send a packet built by make_packet(seq), if connected."""
+        if not self.connected:
+            return
+        self.seq += 1
+        self.sock.sendto(make_packet(self.seq), self.peer)
+
     def send_collision_reset(self):
         if not self.connected:
             return
@@ -136,6 +208,15 @@ class Link:
                 if state is not None:
                     self.player_state = state
                     self.player_state_ms = now
+            decoders = {
+                MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
+                MSG_HIT_ACTOR: decode_hit_actor, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input,
+                MSG_COLLISION_SECTION: decode_collision_section,
+            }
+            if msg[0] in decoders:
+                value = decoders[msg[0]](msg[2])
+                if value is not None:
+                    self.inbox.append((msg[0], value))
             if not self.connected:
                 self.connected = True
                 self.log("connected")

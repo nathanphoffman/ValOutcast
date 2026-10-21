@@ -8,6 +8,7 @@ DEST="$OJK/codeJK2/game/valoutcast"
 mkdir -p "$DEST"
 cp "$ROOT/outcast/src/vo_bridge.h" "$ROOT/outcast/src/vo_bridge.cpp" "$ROOT/outcast/src/vo_field.h" "$ROOT/outcast/src/vo_field.cpp" "$DEST/"
 cp "$ROOT/protocol/vo_link.h" "$ROOT/protocol/vo_link.c" "$DEST/"
+cp "$ROOT/outcast/renderer/vo_overlay.h" "$ROOT/outcast/renderer/vo_overlay.cpp" "$OJK/code/rd-vanilla/"
 cd "$OJK"
 if git apply --check "$ROOT/outcast/patches/0001-bridge-hooks.patch" 2>/dev/null; then
 	git apply "$ROOT/outcast/patches/0001-bridge-hooks.patch"

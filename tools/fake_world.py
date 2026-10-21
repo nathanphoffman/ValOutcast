@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Pretend to be the world side (Valheim) so the player side can be tested alone.
 
+Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
+         --hurt   send PlayerHurt (10 damage) every 8 seconds
+
 Streams a test terrain around the first position it sees: flat ground inside a ring wall
 (3 m tall, 6 m from the start), so the player can walk about 6 m in any direction and no further.
 """
@@ -16,6 +19,8 @@ RING_INNER_M = 6.0
 RING_OUTER_M = 7.0
 WALL_M = 3.0
 RADIUS_CHUNKS = 5
+WALK = "--walk" in sys.argv
+HURT = "--hurt" in sys.argv
 
 
 def build_chunk(cx, cz, ax, ay, az):
@@ -39,10 +44,21 @@ def send_field(link, ax, ay, az):
             link.send_collision_section(cx, cz, build_chunk(cx, cz, ax, ay, az))
 
 
+def send_actors(link, ax, ay, az, t):
+    """Two creatures wandering in small circles near the start."""
+    for n, (dx, dz) in enumerate(((3.0, -2.0), (-3.0, 2.5))):
+        a = t * 0.5 + n
+        pos = (ax + dx + math.cos(a), ay, az + dz + math.sin(a))
+        link.send_raw(lambda seq, n=n, pos=pos: vo.encode_actor_upsert(seq, 100 + n, pos, 0.5, 1.8, 255, vo.ACTOR_HOSTILE))
+
+
 link = vo.Link(vo.ROLE_WORLD, log=lambda m: print("[fake_world]", m, flush=True))
 print("[fake_world] waiting for player side on port", vo.PORTS[vo.ROLE_WORLD], flush=True)
 anchor = None
 last_pos = None
+last_actors = 0
+last_hurt = time.time()
+last_input = 0
 last_print = 0
 last_field = 0
 try:
@@ -67,9 +83,23 @@ try:
             elif now - last_field > 5:
                 send_field(link, *anchor)
                 last_field = now
+            if now - last_actors > 0.1:
+                last_actors = now
+                send_actors(link, *anchor, now)
+            if WALK and now - last_input > 1 / 60:
+                last_input = now
+                link.send_raw(lambda seq: vo.encode_input(seq, 0, 1.0, 0.0, 0.0, 0.5, 0.0))
+            if HURT and now - last_hurt > 8:
+                last_hurt = now
+                link.send_raw(lambda seq: vo.encode_player_hurt(seq, 10.0, (0.0, 0.0, -1.0), 0))
+                print("[fake_world] sent PlayerHurt", flush=True)
             if now - last_print > 1:
                 last_print = now
                 print("[fake_world] player at (%.2f, %.2f, %.2f) looking (%.2f, %.2f, %.2f)" % (pos + look), flush=True)
-        time.sleep(0.02)
+        for kind, value in link.inbox:
+            if kind == vo.MSG_HIT_ACTOR:
+                print("[fake_world] HitActor id=%d damage=%.0f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
+        link.inbox.clear()
+        time.sleep(0.005)
 except KeyboardInterrupt:
     pass

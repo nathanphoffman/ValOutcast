@@ -15,6 +15,15 @@ extern "C" {
 #define VO_MSG_PLAYER_STATE 3
 #define VO_MSG_COLLISION_SECTION 4
 #define VO_MSG_COLLISION_RESET 5
+#define VO_MSG_ACTOR_UPSERT 6
+#define VO_MSG_ACTOR_REMOVE 7
+#define VO_MSG_HIT_ACTOR 8
+#define VO_MSG_PLAYER_HURT 9
+#define VO_MSG_INPUT 10
+#define VO_BUTTON_ATTACK 1
+#define VO_BUTTON_ALT_ATTACK 2
+#define VO_BUTTON_USE 4
+#define VO_ACTOR_HOSTILE 1
 #define VO_CHUNK_CELLS 16
 #define VO_CELL_SIZE_M 0.5f
 #define VO_HEIGHT_UNITS_PER_M 32
@@ -26,6 +35,26 @@ extern "C" {
 #define VO_HEARTBEAT_MS 1000
 #define VO_TIMEOUT_MS 3000
 #define VO_HEADER_SIZE 8
+
+typedef struct vo_actor {
+	uint32_t id;
+	float pos[3];       /* feet, meters, wire space */
+	float radius, height;
+	int hp;             /* 0..255, 255 = full */
+	int flags;
+} vo_actor;
+
+typedef struct vo_hurt {
+	float damage;
+	float dir[3];
+	uint32_t source;
+} vo_hurt;
+
+typedef struct vo_input {
+	uint32_t buttons;
+	float forward, right, up;
+	float yaw, pitch;   /* degrees changed since the last packet */
+} vo_input;
 
 typedef void (*vo_log_fn)(const char *message);
 /* Called for every valid packet that is not Hello or Heartbeat. payload points just past the 8-byte header. */
@@ -56,6 +85,18 @@ int vo_decode_collision_section(const uint8_t *payload, int len, int32_t *cx, in
 void vo_decode_player_state(const uint8_t *payload, float pos[3], float look[3]);
 /* Sends a PlayerState if connected. Position in meters, look is a unit vector, wire coordinates (see PROTOCOL.md). */
 void vo_link_send_player_state(vo_link *link, const float pos[3], const float look[3]);
+/* Creature, combat and input messages. Encoders return the packet size. Decoders take the payload after the header and return 0, or -1 if it is too short. */
+int vo_encode_actor_upsert(uint8_t *out, uint32_t seq, const vo_actor *a);
+int vo_decode_actor_upsert(const uint8_t *payload, int len, vo_actor *a);
+int vo_encode_actor_remove(uint8_t *out, uint32_t seq, uint32_t id);
+int vo_decode_actor_remove(const uint8_t *payload, int len, uint32_t *id);
+int vo_encode_hit_actor(uint8_t *out, uint32_t seq, uint32_t id, float damage, const float dir[3]);
+int vo_encode_player_hurt(uint8_t *out, uint32_t seq, const vo_hurt *h);
+int vo_decode_player_hurt(const uint8_t *payload, int len, vo_hurt *h);
+int vo_encode_input(uint8_t *out, uint32_t seq, const vo_input *in);
+int vo_decode_input(const uint8_t *payload, int len, vo_input *in);
+/* Sends a HitActor if connected. */
+void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);
 /* Returns the message type, or -1 if the packet is not valid. */
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out);
 

@@ -2,7 +2,9 @@
 #include "vo_bridge.h"
 #include "vo_field.h"
 
+#include <math.h>
 #include <stdlib.h>
+#include <time.h>
 
 extern "C" {
 #include "vo_link.h"
@@ -11,6 +13,12 @@ extern "C" {
 // Outcast uses 32 units per meter, X forward, Y left, Z up. The wire is meters, X right, Y up, -Z forward.
 static const float UNITS_PER_METER = 32.0f;
 static const int KEEP_CHUNKS = 12;  // forget terrain chunks farther than this (in chunks of 8 m)
+static const int MAX_PROXIES = 64;
+static const int PROXY_HEALTH = 100000;      // proxies never die here; Valheim decides who is alive
+static const int PROXY_TIMEOUT_MS = 1000;    // drop a proxy this long after the last update
+static const float HURT_SCALE = 4.0f;        // Valheim damage points to Outcast damage points (Valheim's player has about 25 health, Outcast's 100)
+static const float MOUSE_DEGREES_PER_COUNT = 0.11f;
+static const int INPUT_TIMEOUT_MS = 500;
 
 static void VO_ToWire(const vec3_t q, float out[3], float scale)
 {
@@ -29,6 +37,124 @@ static qboolean s_onField = qfalse;
 static int s_framesSinceEvict = 0;
 static int s_debugFrames = 0;  // set VO_DEBUG=1 in the environment to print the player's position every second or so
 
+struct Proxy {
+	uint32_t id;
+	gentity_t *ent;
+	int lastSeenMs;
+};
+static Proxy s_proxies[64];
+static int s_proxyCount = 0;
+
+static vo_input s_input;
+static uint32_t s_inputMs = 0;
+static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while Valheim drives the view
+static qboolean s_inputLive = qfalse;
+
+static uint32_t VO_NowMs(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint32_t)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
+}
+
+// Wire (meters, X right, Y up, -Z forward) to Outcast (units, X forward, Y left, Z up).
+static void VO_FromWire(const float w[3], vec3_t out, float scale)
+{
+	out[0] = -w[2] * scale;
+	out[1] = -w[0] * scale;
+	out[2] = w[1] * scale;
+}
+
+static void VO_RemoveProxy(int index)
+{
+	Proxy &p = s_proxies[index];
+	if (p.ent && p.ent->inuse) {
+		gi.unlinkentity(p.ent);
+		G_FreeEntity(p.ent);
+	}
+	s_proxies[index] = s_proxies[--s_proxyCount];
+}
+
+static void VO_ClearProxies(void)
+{
+	while (s_proxyCount > 0) VO_RemoveProxy(s_proxyCount - 1);
+}
+
+static void VO_UpsertActor(const vo_actor *a)
+{
+	int i;
+	for (i = 0; i < s_proxyCount; i++) {
+		if (s_proxies[i].id == a->id) break;
+	}
+	if (i == s_proxyCount) {
+		if (s_proxyCount >= MAX_PROXIES) return;
+		gentity_t *ent = G_Spawn();
+		if (!ent) return;
+		ent->classname = "vo_actor";
+		ent->svFlags = SVF_NOCLIENT;          // invisible: Valheim draws the creature
+		ent->contents = CONTENTS_BODY;        // the player can walk into it and hit it
+		ent->clipmask = 0;
+		ent->takedamage = qtrue;
+		ent->health = ent->max_health = PROXY_HEALTH;
+		ent->e_ThinkFunc = thinkF_NULL;
+		ent->nextthink = 0;
+		s_proxies[i].id = a->id;
+		s_proxies[i].ent = ent;
+		s_proxyCount++;
+	}
+	Proxy &p = s_proxies[i];
+	p.lastSeenMs = (int)VO_NowMs();
+
+	const float half = a->radius * UNITS_PER_METER;
+	VectorSet(p.ent->mins, -half, -half, 0.0f);
+	VectorSet(p.ent->maxs, half, half, a->height * UNITS_PER_METER);
+	vec3_t origin;
+	VO_FromWire(a->pos, origin, UNITS_PER_METER);
+	G_SetOrigin(p.ent, origin);
+	gi.linkentity(p.ent);
+}
+
+static void VO_RemoveActorById(uint32_t id)
+{
+	for (int i = 0; i < s_proxyCount; i++) {
+		if (s_proxies[i].id == id) {
+			VO_RemoveProxy(i);
+			return;
+		}
+	}
+}
+
+// Damage the player did to a proxy since the last frame goes to Valheim; the proxy's health is topped up again.
+static void VO_SendProxyHits(const gentity_t *player)
+{
+	for (int i = 0; i < s_proxyCount; i++) {
+		gentity_t *ent = s_proxies[i].ent;
+		const int damage = PROXY_HEALTH - ent->health;
+		if (damage <= 0) continue;
+		ent->health = PROXY_HEALTH;
+
+		vec3_t toActor;
+		VectorSubtract(ent->currentOrigin, player->currentOrigin, toActor);
+		toActor[2] = 0.0f;
+		VectorNormalize(toActor);
+		float wire[3];
+		VO_ToWire(toActor, wire, 1.0f);
+		vo_link_send_hit_actor(&s_link, s_proxies[i].id, (float)damage, wire);
+	}
+}
+
+static void VO_ApplyPlayerHurt(const vo_hurt *h)
+{
+	gentity_t *player = &g_entities[0];
+	if (!s_active || !player->client || player->health <= 0) return;
+	const int damage = (int)ceilf(h->damage * HURT_SCALE);
+	if (damage <= 0) return;
+	// h->dir is the direction the blow travels (wire space); G_Damage wants it in Outcast space.
+	vec3_t dir;
+	VO_FromWire(h->dir, dir, 1.0f);
+	G_Damage(player, &g_entities[ENTITYNUM_WORLD], &g_entities[ENTITYNUM_WORLD], dir, NULL, damage, 0, MOD_UNKNOWN);
+}
+
 static void VO_Log(const char *message)
 {
 	gi.Printf("ValOutcast: %s\n", message);
@@ -44,6 +170,26 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 			VoField_SetChunk(cx, cz, heights);
 	} else if (type == VO_MSG_COLLISION_RESET) {
 		VoField_Clear();
+	} else if (type == VO_MSG_ACTOR_UPSERT) {
+		vo_actor a;
+		if (s_active && vo_decode_actor_upsert(payload, len, &a) == 0) VO_UpsertActor(&a);
+	} else if (type == VO_MSG_ACTOR_REMOVE) {
+		uint32_t id;
+		if (vo_decode_actor_remove(payload, len, &id) == 0) VO_RemoveActorById(id);
+	} else if (type == VO_MSG_PLAYER_HURT) {
+		vo_hurt h;
+		if (vo_decode_player_hurt(payload, len, &h) == 0) VO_ApplyPlayerHurt(&h);
+	} else if (type == VO_MSG_INPUT) {
+		vo_input in;
+		if (vo_decode_input(payload, len, &in) == 0) {
+			s_input.buttons = in.buttons;
+			s_input.forward = in.forward;
+			s_input.right = in.right;
+			s_input.up = in.up;
+			s_input.yaw += in.yaw;       // look changes add up until the next game frame uses them
+			s_input.pitch += in.pitch;
+			s_inputMs = VO_NowMs();
+		}
 	}
 }
 
@@ -51,6 +197,9 @@ void VO_Init(void)
 {
 	if (s_open) return;
 	VoField_Clear();
+	s_proxyCount = 0;   // the entities themselves were thrown away with the old level
+	memset(&s_input, 0, sizeof(s_input));
+	s_inputLive = qfalse;
 	if (vo_link_open(&s_link, VO_ROLE_PLAYER, VO_Log) == 0) {
 		s_link.on_message = VO_OnMessage;
 		s_open = qtrue;
@@ -82,6 +231,26 @@ void VO_Frame(void)
 		s_active = qfalse;
 	}
 
+	if (!s_active || !s_link.connected) {
+		VO_ClearProxies();
+	} else {
+		const int nowMs = (int)VO_NowMs();
+		for (int i = s_proxyCount - 1; i >= 0; i--) {
+			if (nowMs - s_proxies[i].lastSeenMs > PROXY_TIMEOUT_MS) VO_RemoveProxy(i);
+		}
+		VO_SendProxyHits(ent);
+	}
+
+	if (getenv("VO_DEBUG_SKIP") && in_camera && (level.framenum % 40) == 0) {
+		gi.SendConsoleCommand("exitview\n");  // test helper: skip cutscenes with no one at the keyboard
+	}
+
+	if (getenv("VO_DEBUG_HIT") && s_active && s_proxyCount > 0 && (level.framenum % 120) == 0) {
+		// Test helper: the player "hits" the first creature for 25 damage every few seconds.
+		vec3_t dir = {1, 0, 0};
+		G_Damage(s_proxies[0].ent, ent, ent, dir, NULL, 25, 0, MOD_MELEE);
+	}
+
 	if (s_link.connected && s_active) {
 		vec3_t forward;
 		float pos[3], look[3];
@@ -98,7 +267,9 @@ void VO_Frame(void)
 
 	if (getenv("VO_DEBUG") && ++s_debugFrames >= 40) {
 		s_debugFrames = 0;
-		gi.Printf("ValOutcast: feet at (%.1f, %.1f, %.1f), %d chunks\n", feet[0], feet[1], feet[2], VoField_ChunkCount());
+		gi.Printf("ValOutcast: feet at (%.1f, %.1f, %.1f), %d chunks, %d creatures, active %d (camera %d, locked %d, health %d, ground %d)\n",
+		          feet[0], feet[1], feet[2], VoField_ChunkCount(), s_proxyCount, (int)s_active, (int)in_camera,
+		          (int)player_locked, ent->health, ent->client->ps.groundEntityNum);
 	}
 
 	qboolean onField = (s_active && VoField_Covers(ent->client->ps.origin)) ? qtrue : qfalse;
@@ -114,6 +285,7 @@ void VO_Shutdown(void)
 	if (!s_open) return;
 	vo_link_close(&s_link);
 	VoField_Clear();
+	s_proxyCount = 0;
 	s_open = qfalse;
 	s_onField = qfalse;
 	s_active = qfalse;
@@ -148,4 +320,40 @@ void VO_PlayerTrace(trace_t *results, const vec3_t start, const vec3_t mins, con
 		results->contents = CONTENTS_SOLID;
 		results->entityNum = ENTITYNUM_WORLD;
 	}
+}
+
+void VO_ModifyUserCmd(gentity_t *ent, usercmd_t *ucmd)
+{
+	if (!s_open || !s_active || ent->s.number != 0 || !ent->client) return;
+	if (VO_NowMs() - s_inputMs > (uint32_t)INPUT_TIMEOUT_MS || s_inputMs == 0) {
+		s_inputLive = qfalse;   // Valheim is not sending input: leave the Outcast keyboard alone
+		return;
+	}
+
+	playerState_t *ps = &ent->client->ps;
+	if (!s_inputLive) {
+		// Valheim just took over the view: start from where the player is looking now.
+		s_inputLive = qtrue;
+		s_yaw = ps->viewangles[YAW];
+		s_pitch = AngleNormalize180(ps->viewangles[PITCH]);
+		s_input.yaw = s_input.pitch = 0.0f;
+	}
+
+	s_yaw += s_input.yaw;                 // positive yaw turns left
+	s_pitch -= s_input.pitch;             // Outcast pitch is positive looking down
+	s_input.yaw = s_input.pitch = 0.0f;
+	if (s_pitch > 85.0f) s_pitch = 85.0f;
+	if (s_pitch < -85.0f) s_pitch = -85.0f;
+
+	ucmd->angles[YAW] = (ANGLE2SHORT(s_yaw) - ps->delta_angles[YAW]) & 0xFFFF;
+	ucmd->angles[PITCH] = (ANGLE2SHORT(s_pitch) - ps->delta_angles[PITCH]) & 0xFFFF;
+
+	ucmd->forwardmove = (signed char)(127.0f * fmaxf(-1.0f, fminf(1.0f, s_input.forward)));
+	ucmd->rightmove = (signed char)(127.0f * fmaxf(-1.0f, fminf(1.0f, s_input.right)));
+	ucmd->upmove = (signed char)(127.0f * fmaxf(-1.0f, fminf(1.0f, s_input.up)));
+
+	ucmd->buttons &= ~(BUTTON_ATTACK | BUTTON_ALT_ATTACK | BUTTON_USE);
+	if (s_input.buttons & VO_BUTTON_ATTACK) ucmd->buttons |= BUTTON_ATTACK;
+	if (s_input.buttons & VO_BUTTON_ALT_ATTACK) ucmd->buttons |= BUTTON_ALT_ATTACK;
+	if (s_input.buttons & VO_BUTTON_USE) ucmd->buttons |= BUTTON_USE;
 }
