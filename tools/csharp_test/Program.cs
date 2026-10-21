@@ -16,6 +16,12 @@ class Program
         var beat = new byte[] { 0x56, 0x4F, 1, 2, 2, 0, 0, 0, 0x88, 0x13, 0, 0 };
         Check(VoLink.EncodeHello(1, VoLink.RolePlayer, 1234).AsSpan().SequenceEqual(hello), "hello bytes");
         Check(VoLink.EncodeHeartbeat(2, 5000).AsSpan().SequenceEqual(beat), "heartbeat bytes");
+        var state = new byte[] { 0x56, 0x4F, 1, 3, 3, 0, 0, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0x40, 0, 0, 0x40, 0x40,
+                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0xBF };
+        Check(VoLink.EncodePlayerState(3, new float[] { 1, 2, 3 }, new float[] { 0, 0, -1 }).AsSpan().SequenceEqual(state), "player state bytes");
+        var rp = new float[3]; var rl = new float[3];
+        VoLink.DecodePlayerState(state, rp, rl);
+        Check(rp[0] == 1 && rp[1] == 2 && rp[2] == 3 && rl[2] == -1, "decode player state");
         Check(VoLink.Decode(hello, 16, out uint seq) == VoLink.MsgHello && seq == 1, "decode hello");
         Check(VoLink.Decode(hello, 4, out _) == -1, "decode short");
 

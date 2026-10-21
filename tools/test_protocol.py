@@ -12,6 +12,9 @@ HEARTBEAT = bytes.fromhex("564F010202000000" "88130000")
 
 assert vo.encode_hello(1, vo.ROLE_PLAYER, 1234) == HELLO
 assert vo.encode_heartbeat(2, 5000) == HEARTBEAT
+STATE = bytes.fromhex("564F010303000000" "0000803F" "00000040" "00004040" "00000000" "00000000" "000080BF")
+assert vo.encode_player_state(3, (1, 2, 3), (0, 0, -1)) == STATE
+assert vo.decode_player_state(STATE[8:]) == ((1.0, 2.0, 3.0), (0.0, 0.0, -1.0))
 assert vo.decode(HELLO)[:2] == (vo.MSG_HELLO, 1)
 assert vo.decode(b"\x00\x01") is None
 assert vo.decode(b"XX" + HELLO[2:]) is None

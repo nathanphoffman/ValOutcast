@@ -8,6 +8,8 @@ MAGIC = 0x4F56
 VERSION = 1
 MSG_HELLO = 1
 MSG_HEARTBEAT = 2
+MSG_PLAYER_STATE = 3
+PLAYER_STATE_TIMEOUT_MS = 500
 ROLE_WORLD = 0
 ROLE_PLAYER = 1
 PORTS = {ROLE_WORLD: 47100, ROLE_PLAYER: 47101}
@@ -23,6 +25,18 @@ def encode_hello(seq, role, pid):
 
 def encode_heartbeat(seq, uptime_ms):
     return _HEADER.pack(MAGIC, VERSION, MSG_HEARTBEAT, seq) + struct.pack("<I", uptime_ms)
+
+
+def encode_player_state(seq, pos, look):
+    return _HEADER.pack(MAGIC, VERSION, MSG_PLAYER_STATE, seq) + struct.pack("<6f", *pos, *look)
+
+
+def decode_player_state(payload):
+    """Return (pos, look) as two 3-tuples, or None if the payload is too short."""
+    if len(payload) < 24:
+        return None
+    v = struct.unpack_from("<6f", payload)
+    return v[:3], v[3:]
 
 
 def decode(data):
@@ -48,6 +62,8 @@ class Link:
         self.start_ms = _now_ms()
         self.last_send = -HEARTBEAT_MS
         self.last_recv = 0
+        self.player_state = None      # (pos, look) of the newest PlayerState
+        self.player_state_ms = 0
         self.peer = ("127.0.0.1", PORTS[ROLE_PLAYER if role == ROLE_WORLD else ROLE_WORLD])
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", PORTS[role]))
@@ -63,6 +79,12 @@ class Link:
         self.sock.sendto(encode_heartbeat(self.seq, now - self.start_ms), self.peer)
         self.last_send = now
 
+    def send_player_state(self, pos, look):
+        if not self.connected:
+            return
+        self.seq += 1
+        self.sock.sendto(encode_player_state(self.seq, pos, look), self.peer)
+
     def tick(self):
         now = _now_ms()
         while True:
@@ -74,6 +96,11 @@ class Link:
             if msg is None:
                 continue
             self.last_recv = now
+            if msg[0] == MSG_PLAYER_STATE:
+                state = decode_player_state(msg[2])
+                if state is not None:
+                    self.player_state = state
+                    self.player_state_ms = now
             if not self.connected:
                 self.connected = True
                 self.log("connected")

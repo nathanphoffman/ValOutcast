@@ -12,6 +12,8 @@ namespace ValOutcast
         public const byte Version = 1;
         public const byte MsgHello = 1;
         public const byte MsgHeartbeat = 2;
+        public const byte MsgPlayerState = 3;
+        public const int PlayerStateTimeoutMs = 500;
         public const byte RoleWorld = 0;
         public const byte RolePlayer = 1;
         public const int PortWorld = 47100;
@@ -22,6 +24,13 @@ namespace ValOutcast
 
         public bool Connected { get; private set; }
 
+        /// <summary>Newest PlayerState (wire coordinates), valid when HasPlayerState is true.</summary>
+        public float[] StatePos = new float[3];
+        public float[] StateLook = new float[3];
+        public bool HasPlayerState;
+        /// <summary>True while PlayerState packets are arriving (newer than PlayerStateTimeoutMs).</summary>
+        public bool PlayerStateFresh => Connected && HasPlayerState && _clock.ElapsedMilliseconds - _lastState <= PlayerStateTimeoutMs;
+
         private readonly byte _role;
         private readonly Action<string> _log;
         private readonly Socket _sock;
@@ -31,6 +40,7 @@ namespace ValOutcast
         private uint _seq;
         private long _lastSend = -HeartbeatMs;
         private long _lastRecv;
+        private long _lastState;
 
         public VoLink(byte role, Action<string> log)
         {
@@ -59,6 +69,28 @@ namespace ValOutcast
             WriteHeader(b, MsgHeartbeat, seq);
             BitConverter.GetBytes(uptimeMs).CopyTo(b, 8);
             return b;
+        }
+
+        public static byte[] EncodePlayerState(uint seq, float[] pos, float[] look)
+        {
+            var b = new byte[32];
+            WriteHeader(b, MsgPlayerState, seq);
+            for (int i = 0; i < 3; i++)
+            {
+                BitConverter.GetBytes(pos[i]).CopyTo(b, 8 + 4 * i);
+                BitConverter.GetBytes(look[i]).CopyTo(b, 20 + 4 * i);
+            }
+            return b;
+        }
+
+        /// <summary>Reads the 24-byte payload that starts at offset 8.</summary>
+        public static void DecodePlayerState(byte[] data, float[] pos, float[] look)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                pos[i] = BitConverter.ToSingle(data, 8 + 4 * i);
+                look[i] = BitConverter.ToSingle(data, 20 + 4 * i);
+            }
         }
 
         /// <summary>Returns the message type, or -1 if the packet is not valid.</summary>
@@ -97,6 +129,12 @@ namespace ValOutcast
                 int type = Decode(_recvBuf, n, out _);
                 if (type < 0) continue;
                 _lastRecv = now;
+                if (type == MsgPlayerState && n >= 32)
+                {
+                    DecodePlayerState(_recvBuf, StatePos, StateLook);
+                    HasPlayerState = true;
+                    _lastState = now;
+                }
                 if (!Connected)
                 {
                     Connected = true;

@@ -58,6 +58,7 @@ Each phase ends with something you can run and check. Don't start the next one u
 - **Confirmed with the real games:** Valheim logged `link: connected` while Outcast was running. The real-game "lost connection" check was not isolated (both games were closed together); the fake-partner tests cover it. **Phase 1 is done.**
 
 ### Phase 2: Player sync
+**Status: done.** Confirmed with the real games: walking and turning in Outcast moves and turns the Valheim character. Outcast sends PlayerState (position + look direction) every frame; the Valheim plugin moves the player to match, anchored to where the player stands, and ignores keyboard and mouse while data is arriving. Terrain is ignored for now, so the Valheim character can float or clip (fixed in Phase 3). Test without Outcast: run `tools/fake_player.py`, it walks the Valheim player in a circle.
 - Outcast sends PlayerState (position, look direction) every frame.
 - Valheim moves its player to match and hides its own input.
 - **Done when:** walking in Outcast moves the Valheim character the same way.

@@ -50,6 +50,40 @@ int vo_encode_heartbeat(uint8_t *out, uint32_t seq, uint32_t uptime_ms)
 	return 12;
 }
 
+static void put_f32(uint8_t *p, float f)
+{
+	uint32_t v;
+	memcpy(&v, &f, 4);
+	put_u32(p, v);
+}
+static float get_f32(const uint8_t *p)
+{
+	uint32_t v = get_u32(p);
+	float f;
+	memcpy(&f, &v, 4);
+	return f;
+}
+
+int vo_encode_player_state(uint8_t *out, uint32_t seq, const float pos[3], const float look[3])
+{
+	int i;
+	put_header(out, VO_MSG_PLAYER_STATE, seq);
+	for (i = 0; i < 3; i++) {
+		put_f32(out + 8 + 4 * i, pos[i]);
+		put_f32(out + 20 + 4 * i, look[i]);
+	}
+	return 32;
+}
+
+void vo_decode_player_state(const uint8_t *payload, float pos[3], float look[3])
+{
+	int i;
+	for (i = 0; i < 3; i++) {
+		pos[i] = get_f32(payload + 4 * i);
+		look[i] = get_f32(payload + 12 + 4 * i);
+	}
+}
+
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out)
 {
 	if (len < VO_HEADER_SIZE) return -1;
@@ -82,6 +116,15 @@ static void send_heartbeat(vo_link *link, uint32_t now)
 	int n = vo_encode_heartbeat(buf, ++link->seq, now - link->start_ms);
 	send_to_peer(link, buf, n);
 	link->last_send_ms = now;
+}
+
+void vo_link_send_player_state(vo_link *link, const float pos[3], const float look[3])
+{
+	uint8_t buf[32];
+	int n;
+	if (link->sock < 0 || !link->connected) return;
+	n = vo_encode_player_state(buf, ++link->seq, pos, look);
+	send_to_peer(link, buf, n);
 }
 
 int vo_link_open(vo_link *link, int role, vo_log_fn log)
