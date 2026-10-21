@@ -2,6 +2,7 @@
 """Pretend to be the world side (Valheim) so the player side can be tested alone.
 
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
+         --nowall leave out the ring wall (flat ground all around)
          --hurt   send PlayerHurt (10 damage) every 8 seconds
 
 Streams a test terrain around the first position it sees: flat ground inside a ring wall
@@ -20,6 +21,9 @@ RING_OUTER_M = 7.0
 WALL_M = 3.0
 RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
+NOWALL = "--nowall" in sys.argv
+if NOWALL:
+    WALL_M = 0.0
 HURT = "--hurt" in sys.argv
 
 
@@ -88,7 +92,7 @@ try:
                 send_actors(link, *anchor, now)
             if WALK and now - last_input > 1 / 60:
                 last_input = now
-                link.send_raw(lambda seq: vo.encode_input(seq, 0, 1.0, 0.0, 0.0, 0.5, 0.0))
+                link.send_raw(lambda seq: vo.encode_input(seq, 0, 1.0, 0.0, 0.0, 0.0 if NOWALL else 0.5, 0.0))
             if HURT and now - last_hurt > 8:
                 last_hurt = now
                 link.send_raw(lambda seq: vo.encode_player_hurt(seq, 10.0, (0.0, 0.0, -1.0), 0))

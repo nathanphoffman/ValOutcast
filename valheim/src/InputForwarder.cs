@@ -9,9 +9,9 @@ namespace ValOutcast
     public class InputForwarder
     {
         private const float SendInterval = 1f / 60f;
-        private const float DegreesPerMouseCount = 0.11f;
         private float _nextSend;
         private float _yaw, _pitch;
+        private int _weapon;
 
         private static bool Button(string name)
         {
@@ -37,10 +37,22 @@ namespace ValOutcast
             }
 
             bool open = MenuOpen();
+            if (!open)
+            {
+                // Weapon keys: the hotbar number keys pick a slot, the mouse wheel goes to the next or previous weapon.
+                for (int i = 1; i <= 8; i++)
+                {
+                    if (ZInput.GetButtonDown("Hotbar" + i) || ZInput.GetButtonDown("Hotbar" + i + "Alt")) _weapon = i;
+                }
+                float wheel = ZInput.GetMouseScrollWheel();
+                if (wheel > 0.01f) _weapon = 10;
+                else if (wheel < -0.01f) _weapon = 11;
+            }
+
             if (!open && ZInput.IsMouseActive())
             {
                 // Mouse moves add up between sends, so no turning is lost.
-                Vector2 d = ZInput.GetMouseDelta() * PlayerController.m_mouseSens * DegreesPerMouseCount;
+                Vector2 d = ZInput.GetMouseDelta() * PlayerController.m_mouseSens * Plugin.MouseDegreesPerCount;
                 _yaw += -d.x;   // moving the mouse right turns right: yaw is positive to the left
                 _pitch += d.y;  // moving the mouse up looks up
             }
@@ -53,6 +65,7 @@ namespace ValOutcast
                 // Menu open: send "no input" so the player stands still.
                 link.SendInput(0, 0f, 0f, 0f, 0f, 0f);
                 _yaw = _pitch = 0f;
+                _weapon = 0;
                 return;
             }
 
@@ -65,8 +78,9 @@ namespace ValOutcast
             float right = (Button("Right") ? 1f : 0f) - (Button("Left") ? 1f : 0f);
             float up = Button("Jump") ? 1f : (Button("Crouch") ? -1f : 0f);
 
-            link.SendInput(buttons, forward, right, up, _yaw, _pitch);
+            link.SendInput(buttons, forward, right, up, _yaw, _pitch, _weapon);
             _yaw = _pitch = 0f;
+            _weapon = 0;
         }
     }
 }

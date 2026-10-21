@@ -41,8 +41,8 @@ assert vo.encode_hit_actor(8, 7, 25.0, (0, 0, -1)) == golden["hit_actor"]
 assert vo.decode_hit_actor(golden["hit_actor"][8:]) == (7, 25.0, (0.0, 0.0, -1.0))
 assert vo.encode_player_hurt(9, 10.0, (1, 0, 0), 42) == golden["player_hurt"]
 assert vo.decode_player_hurt(golden["player_hurt"][8:]) == (10.0, (1.0, 0.0, 0.0), 42)
-assert vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5) == golden["input"]
-assert vo.decode_input(golden["input"][8:]) == (3, 1.0, -1.0, 0.0, 0.5, -0.5)
+assert vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5, 4) == golden["input"]
+assert vo.decode_input(golden["input"][8:]) == (3, 1.0, -1.0, 0.0, 0.5, -0.5, 4)
 assert vo.decode_hit_actor(b"\x00") is None and vo.decode_input(b"") is None
 
 logs = []

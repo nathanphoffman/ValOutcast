@@ -49,6 +49,12 @@ Then make `third_party/jk2run` with links to the three built files and your game
 2. Run `tools/run_outcast.sh` (optionally: `tools/run_outcast.sh artus_mine 1280 720`). Use the same shape as your Valheim window. Leave the Outcast window open behind Valheim, not minimized.
 3. Wait for the Outcast cutscene to finish, then click the Valheim window and play there.
 
+## Controls and tuning
+
+While Outcast drives: WASD, mouse, jump, crouch, left and right click and Use work as in Valheim. The hotbar number keys 1-8 pick an Outcast weapon, and the mouse wheel goes to the next or previous one. Esc still opens Valheim's menu.
+
+Settings are in `BepInEx/config/com.valoutcast.bridge.cfg` inside the Valheim folder (created on the first run): `MouseDegreesPerCount` (mouse speed) and `Brightness` (overlay brightness). Set `VO_SV_FPS` before `tools/run_outcast.sh` to change how often Outcast's game logic runs (default 60; Outcast itself uses 20).
+
 ## Test
 
 `tools/test_all.sh` runs every test that needs no game running. `tools/fake_world.py` and `tools/fake_player.py` stand in for the games.

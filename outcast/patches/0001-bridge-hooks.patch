@@ -202,6 +202,20 @@ index 671b309..844817b 100644
  	level.framenum++;
  	level.previousTime = level.time;
  	level.time = levelTime;
+diff --git a/shared/sdl/sdl_sound.cpp b/shared/sdl/sdl_sound.cpp
+index 45e5a88..347daa2 100644
+--- a/shared/sdl/sdl_sound.cpp
++++ b/shared/sdl/sdl_sound.cpp
+@@ -313,6 +313,9 @@ extern int s_UseOpenAL;
+ // (De)activates sound playback
+ void SNDDMA_Activate( qboolean activate )
+ {
++	// ValOutcast overlay mode: the game is played from another window, so Outcast's sound must not stop when it loses focus
++	if ( getenv( "VO_OVERLAY" ) && !activate ) return;
++
+ #ifdef USE_OPENAL
+ 	if ( s_UseOpenAL )
+ 	{
 diff --git a/shared/sdl/sdl_window.cpp b/shared/sdl/sdl_window.cpp
 index 18daa06..7109654 100644
 --- a/shared/sdl/sdl_window.cpp

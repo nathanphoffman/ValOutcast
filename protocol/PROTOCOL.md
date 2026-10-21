@@ -35,9 +35,9 @@ Packets with the wrong magic or version, or too short, are dropped silently.
 | 7 | ActorRemove | u32 id. 4 bytes. World side to player side. |
 | 8 | HitActor | u32 id, f32 damage (the player side's own damage points), 3 x f32 direction of the blow (unit vector, wire space). 20 bytes. Player side to world side. |
 | 9 | PlayerHurt | f32 damage (the world side's own damage points), 3 x f32 direction the blow travels (unit vector, wire space), u32 source id (0 = unknown). 20 bytes. World side to player side. |
-| 10 | Input | u32 buttons, f32 forward, f32 right, f32 up (each -1..1), f32 look yaw change, f32 look pitch change (degrees since last packet; positive yaw turns left, positive pitch looks up). 24 bytes. World side to player side. |
+| 10 | Input | u32 buttons, f32 forward, f32 right, f32 up (each -1..1), f32 look yaw change, f32 look pitch change (degrees since last packet; positive yaw turns left, positive pitch looks up), i32 weapon request. 28 bytes. World side to player side. |
 
-Input buttons: bit 0 primary attack, bit 1 secondary attack, bit 2 use. Input is sent about 60 times a second while the world side's window has the player's attention (no menu open). If nothing arrives for 500 ms the player side goes back to reading its own keyboard.
+Input buttons: bit 0 primary attack, bit 1 secondary attack, bit 2 use. Weapon request: 0 = none, 1 to 9 = pick that weapon slot, 10 = next weapon, 11 = previous weapon. The world side sends a request once, in the packet right after the key press. The player side remembers a button press until it has used it, so a very short click is not lost. Input is sent about 60 times a second while the world side's window has the player's attention (no menu open). If nothing arrives for 500 ms the player side goes back to reading its own keyboard.
 
 Damage numbers are each game's own points. Each side scales what it receives to its own scale (see the adapters; today Outcast turns Valheim damage into Outcast damage by multiplying by 4, and Valheim takes Outcast damage as is).
 

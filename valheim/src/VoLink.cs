@@ -184,9 +184,9 @@ namespace ValOutcast
             return b;
         }
 
-        public static byte[] EncodeInput(uint seq, uint buttons, float forward, float right, float up, float yaw, float pitch)
+        public static byte[] EncodeInput(uint seq, uint buttons, float forward, float right, float up, float yaw, float pitch, int weapon = 0)
         {
-            var b = new byte[32];
+            var b = new byte[36];
             WriteHeader(b, MsgInput, seq);
             BitConverter.GetBytes(buttons).CopyTo(b, 8);
             BitConverter.GetBytes(forward).CopyTo(b, 12);
@@ -194,6 +194,7 @@ namespace ValOutcast
             BitConverter.GetBytes(up).CopyTo(b, 20);
             BitConverter.GetBytes(yaw).CopyTo(b, 24);
             BitConverter.GetBytes(pitch).CopyTo(b, 28);
+            BitConverter.GetBytes(weapon).CopyTo(b, 32);
             return b;
         }
 
@@ -231,9 +232,10 @@ namespace ValOutcast
             if (Connected) SendPacket(EncodePlayerHurt(++_seq, damage, dir, source));
         }
 
-        public void SendInput(uint buttons, float forward, float right, float up, float yaw, float pitch)
+        /// <summary>weapon: 0 none, 1 to 9 pick that slot, 10 next, 11 previous.</summary>
+        public void SendInput(uint buttons, float forward, float right, float up, float yaw, float pitch, int weapon = 0)
         {
-            if (Connected) SendPacket(EncodeInput(++_seq, buttons, forward, right, up, yaw, pitch));
+            if (Connected) SendPacket(EncodeInput(++_seq, buttons, forward, right, up, yaw, pitch, weapon));
         }
 
         /// <summary>Reads the 24-byte payload that starts at offset 8.</summary>

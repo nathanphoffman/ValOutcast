@@ -186,6 +186,34 @@ namespace ValOutcast
         }
     }
 
+    /// <summary>
+    /// While another game drives the player, Valheim's own actions (hotbar, build, use) are off too.
+    /// The keys go to the other game instead.
+    /// </summary>
+    [HarmonyPatch(typeof(Player), "TakeInput")]
+    internal static class PlayerTakeInputPatch
+    {
+        private static bool Prefix(ref bool __result)
+        {
+            if (PlayerFollow.Active)
+            {
+                __result = false;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>The inventory screen would only get in the way while another game drives.</summary>
+    [HarmonyPatch(typeof(InventoryGui), "Show")]
+    internal static class InventoryShowPatch
+    {
+        private static bool Prefix()
+        {
+            return !PlayerFollow.Active;
+        }
+    }
+
     /// <summary>Ignore the keyboard and mouse while another game drives the player.</summary>
     [HarmonyPatch(typeof(PlayerController), "TakeInput")]
     internal static class PlayerControllerTakeInputPatch

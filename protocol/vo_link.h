@@ -54,6 +54,7 @@ typedef struct vo_input {
 	uint32_t buttons;
 	float forward, right, up;
 	float yaw, pitch;   /* degrees changed since the last packet */
+	int weapon;         /* 0 none, 1-9 slot, 10 next, 11 previous */
 } vo_input;
 
 typedef void (*vo_log_fn)(const char *message);

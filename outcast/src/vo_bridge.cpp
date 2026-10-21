@@ -17,7 +17,6 @@ static const int MAX_PROXIES = 64;
 static const int PROXY_HEALTH = 100000;      // proxies never die here; Valheim decides who is alive
 static const int PROXY_TIMEOUT_MS = 1000;    // drop a proxy this long after the last update
 static const float HURT_SCALE = 4.0f;        // Valheim damage points to Outcast damage points (Valheim's player has about 25 health, Outcast's 100)
-static const float MOUSE_DEGREES_PER_COUNT = 0.11f;
 static const int INPUT_TIMEOUT_MS = 500;
 
 static void VO_ToWire(const vec3_t q, float out[3], float scale)
@@ -49,6 +48,8 @@ static vo_input s_input;
 static uint32_t s_inputMs = 0;
 static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while Valheim drives the view
 static qboolean s_inputLive = qfalse;
+static uint32_t s_buttonLatch = 0;   // button presses not yet used by a game frame (a click can be shorter than a frame)
+static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous
 
 static uint32_t VO_NowMs(void)
 {
@@ -183,6 +184,8 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 		vo_input in;
 		if (vo_decode_input(payload, len, &in) == 0) {
 			s_input.buttons = in.buttons;
+			s_buttonLatch |= in.buttons;
+			if (in.weapon != 0) s_weaponRequest = in.weapon;
 			s_input.forward = in.forward;
 			s_input.right = in.right;
 			s_input.up = in.up;
@@ -200,6 +203,8 @@ void VO_Init(void)
 	s_proxyCount = 0;   // the entities themselves were thrown away with the old level
 	memset(&s_input, 0, sizeof(s_input));
 	s_inputLive = qfalse;
+	s_buttonLatch = 0;
+	s_weaponRequest = 0;
 	if (vo_link_open(&s_link, VO_ROLE_PLAYER, VO_Log) == 0) {
 		s_link.on_message = VO_OnMessage;
 		s_open = qtrue;
@@ -229,6 +234,17 @@ void VO_Frame(void)
 		if (free && ent->client->ps.groundEntityNum == ENTITYNUM_WORLD) s_active = qtrue;
 	} else if (!free) {
 		s_active = qfalse;
+	}
+
+	if (s_weaponRequest != 0) {
+		if (s_active) {
+			char cmd[32];
+			if (s_weaponRequest == 10) Com_sprintf(cmd, sizeof(cmd), "weapnext\n");
+			else if (s_weaponRequest == 11) Com_sprintf(cmd, sizeof(cmd), "weapprev\n");
+			else Com_sprintf(cmd, sizeof(cmd), "weapon %d\n", s_weaponRequest);
+			gi.SendConsoleCommand(cmd);
+		}
+		s_weaponRequest = 0;
 	}
 
 	if (!s_active || !s_link.connected) {
@@ -267,9 +283,9 @@ void VO_Frame(void)
 
 	if (getenv("VO_DEBUG") && ++s_debugFrames >= 40) {
 		s_debugFrames = 0;
-		gi.Printf("ValOutcast: feet at (%.1f, %.1f, %.1f), %d chunks, %d creatures, active %d (camera %d, locked %d, health %d, ground %d)\n",
+		gi.Printf("ValOutcast: feet at (%.1f, %.1f, %.1f), %d chunks, %d creatures, active %d (camera %d, locked %d, health %d, ground %d) time %d\n",
 		          feet[0], feet[1], feet[2], VoField_ChunkCount(), s_proxyCount, (int)s_active, (int)in_camera,
-		          (int)player_locked, ent->health, ent->client->ps.groundEntityNum);
+		          (int)player_locked, ent->health, ent->client->ps.groundEntityNum, level.time);
 	}
 
 	qboolean onField = (s_active && VoField_Covers(ent->client->ps.origin)) ? qtrue : qfalse;
@@ -352,8 +368,10 @@ void VO_ModifyUserCmd(gentity_t *ent, usercmd_t *ucmd)
 	ucmd->rightmove = (signed char)(127.0f * fmaxf(-1.0f, fminf(1.0f, s_input.right)));
 	ucmd->upmove = (signed char)(127.0f * fmaxf(-1.0f, fminf(1.0f, s_input.up)));
 
+	const uint32_t buttons = s_input.buttons | s_buttonLatch;
+	s_buttonLatch = 0;
 	ucmd->buttons &= ~(BUTTON_ATTACK | BUTTON_ALT_ATTACK | BUTTON_USE);
-	if (s_input.buttons & VO_BUTTON_ATTACK) ucmd->buttons |= BUTTON_ATTACK;
-	if (s_input.buttons & VO_BUTTON_ALT_ATTACK) ucmd->buttons |= BUTTON_ALT_ATTACK;
-	if (s_input.buttons & VO_BUTTON_USE) ucmd->buttons |= BUTTON_USE;
+	if (buttons & VO_BUTTON_ATTACK) ucmd->buttons |= BUTTON_ATTACK;
+	if (buttons & VO_BUTTON_ALT_ATTACK) ucmd->buttons |= BUTTON_ALT_ATTACK;
+	if (buttons & VO_BUTTON_USE) ucmd->buttons |= BUTTON_USE;
 }

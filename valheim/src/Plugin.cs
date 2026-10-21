@@ -9,6 +9,11 @@ namespace ValOutcast
     public class Plugin : BaseUnityPlugin
     {
         public static VoLink Link;
+
+        /// <summary>Degrees of turning per mouse movement (on top of Valheim's own mouse sensitivity setting).</summary>
+        public static float MouseDegreesPerCount = 1f;
+        /// <summary>1 = the picture as Outcast drew it, lower is dimmer.</summary>
+        public static float OverlayBrightness = 0.85f;
         private Harmony _harmony;
         private readonly TerrainStreamer _streamer = new TerrainStreamer();
         private readonly CreatureStreamer _creatures = new CreatureStreamer();
@@ -21,6 +26,10 @@ namespace ValOutcast
         private void Awake()
         {
             Logger.LogInfo("ValOutcast hello: plugin loaded");
+            MouseDegreesPerCount = Config.Bind("Input", "MouseDegreesPerCount", 1f,
+                "How far the view turns per mouse movement. Higher is faster. Valheim's own mouse sensitivity setting applies on top.").Value;
+            OverlayBrightness = Config.Bind("Overlay", "Brightness", 0.85f,
+                "Brightness of Outcast's picture drawn over Valheim. 1 is as drawn, lower is dimmer.").Value;
             // Keep updating the link while the other game's window has focus.
             Application.runInBackground = true;
             try

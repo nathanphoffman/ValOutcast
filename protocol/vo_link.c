@@ -186,18 +186,20 @@ int vo_encode_input(uint8_t *out, uint32_t seq, const vo_input *in)
 	put_f32(out + 20, in->up);
 	put_f32(out + 24, in->yaw);
 	put_f32(out + 28, in->pitch);
-	return 32;
+	put_u32(out + 32, (uint32_t)in->weapon);
+	return 36;
 }
 
 int vo_decode_input(const uint8_t *payload, int len, vo_input *in)
 {
-	if (len < 24) return -1;
+	if (len < 28) return -1;
 	in->buttons = get_u32(payload);
 	in->forward = get_f32(payload + 4);
 	in->right = get_f32(payload + 8);
 	in->up = get_f32(payload + 12);
 	in->yaw = get_f32(payload + 16);
 	in->pitch = get_f32(payload + 20);
+	in->weapon = (int)get_u32(payload + 24);
 	return 0;
 }
 

@@ -51,6 +51,10 @@ class Program
 
         // Harmony patches
         Method("Player", "FixedUpdate", 0);
+        Method("Player", "TakeInput", 0);
+        Method("InventoryGui", "Show");
+        Method("ZInput", "GetButtonDown", 1);
+        Method("ZInput", "GetMouseScrollWheel", 0);
         Method("PlayerController", "TakeInput", 1);
         Method("Character", "RPC_Damage", 2);
         // Player and camera

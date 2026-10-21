@@ -88,6 +88,9 @@ Each phase ends with something you can run and check. Don't start the next one u
 ### Phase 6: World sync and polish
 **Status:** partly done.
 - Done: Valheim keyboard and mouse drive Outcast (`Input` message, `InputForwarder.cs`). Input stops while any Valheim menu, chat or console is open. Bridge switches itself off in cutscenes and on death.
+- Done: weapon switching (Valheim hotbar keys 1-8 pick a weapon slot, mouse wheel = next/previous weapon), and short clicks are not lost. While Outcast drives, Valheim's own hotbar, build and inventory screens are off (Esc still opens Valheim's menu).
+- Done: Outcast's sound keeps playing when its window is not focused, and the game logic runs at 60 updates a second (`VO_SV_FPS`, default 60) instead of 20, so movement is smooth and responds quicker. Walking speed was checked to be the same at 60.
+- Done: tuning in `BepInEx/config/com.valoutcast.bridge.cfg` (created the first time Valheim runs with the plugin): `MouseDegreesPerCount` (mouse speed, default 1) and `Brightness` (overlay brightness, default 0.85).
 - Done: plugin parts switch themselves off after one error instead of flooding the log.
 - Not done, on purpose: time of day and weather sync. Outcast only draws the hands and saber, so there is nothing for it to light yet.
 - Not done: save syncing. Loading a Valheim save does not rewind Outcast (and the reverse).

@@ -44,7 +44,7 @@ class Program
         Check(VoLink.EncodeActorRemove(7, 7).AsSpan().SequenceEqual(Golden("actor_remove")), "actor_remove bytes");
         Check(VoLink.EncodeHitActor(8, 7, 25f, new float[] { 0, 0, -1 }).AsSpan().SequenceEqual(Golden("hit_actor")), "hit_actor bytes");
         Check(VoLink.EncodePlayerHurt(9, 10f, new float[] { 1, 0, 0 }, 42).AsSpan().SequenceEqual(Golden("player_hurt")), "player_hurt bytes");
-        Check(VoLink.EncodeInput(10, 3, 1f, -1f, 0f, 0.5f, -0.5f).AsSpan().SequenceEqual(Golden("input")), "input bytes");
+        Check(VoLink.EncodeInput(10, 3, 1f, -1f, 0f, 0.5f, -0.5f, 4).AsSpan().SequenceEqual(Golden("input")), "input bytes");
         var hitBytes = Golden("hit_actor");
         Check(VoLink.DecodeHitActor(hitBytes, hitBytes.Length, out var hitMsg) && hitMsg.Id == 7 && hitMsg.Damage == 25f && hitMsg.DirZ == -1f, "hit_actor decode");
         Check(!VoLink.DecodeHitActor(hitBytes, 10, out _), "hit_actor short");

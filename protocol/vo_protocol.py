@@ -115,15 +115,15 @@ def decode_player_hurt(payload):
     return v[0], v[1:4], v[4]
 
 
-def encode_input(seq, buttons, forward, right, up, yaw, pitch):
-    return _HEADER.pack(MAGIC, VERSION, MSG_INPUT, seq) + struct.pack("<I5f", buttons, forward, right, up, yaw, pitch)
+def encode_input(seq, buttons, forward, right, up, yaw, pitch, weapon=0):
+    return _HEADER.pack(MAGIC, VERSION, MSG_INPUT, seq) + struct.pack("<I5fi", buttons, forward, right, up, yaw, pitch, weapon)
 
 
 def decode_input(payload):
-    """Return (buttons, forward, right, up, yaw, pitch) or None."""
-    if len(payload) < 24:
+    """Return (buttons, forward, right, up, yaw, pitch, weapon) or None."""
+    if len(payload) < 28:
         return None
-    return struct.unpack_from("<I5f", payload)
+    return struct.unpack_from("<I5fi", payload)
 
 
 def decode(data):

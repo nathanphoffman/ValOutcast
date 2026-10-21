@@ -96,7 +96,9 @@ namespace ValOutcast
             var rect = new Rect(0f, 0f, Screen.width, Screen.height);
             if (_material != null)
             {
-                Graphics.DrawTexture(rect, _texture, _material);
+                float b = Mathf.Clamp(Plugin.OverlayBrightness, 0f, 2f);
+                // The color tints the picture's red, green and blue (alpha stays as drawn), which dims it without making it see-through.
+                Graphics.DrawTexture(rect, _texture, new Rect(0f, 0f, 1f, 1f), 0, 0, 0, 0, new Color(b, b, b, 1f), _material);
             }
             else
             {

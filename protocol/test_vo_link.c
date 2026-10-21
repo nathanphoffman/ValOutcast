@@ -96,11 +96,12 @@ int main(int argc, char **argv)
 		check(n > 0 && vo_encode_player_hurt(got, 9, &h) == n && memcmp(got, want, n) == 0, "player_hurt bytes");
 		check(vo_decode_player_hurt(want + 8, n - 8, &h2) == 0 && h2.damage == 10 && h2.dir[0] == 1 && h2.source == 42, "player_hurt decode");
 
-		in.buttons = 3; in.forward = 1; in.right = -1; in.up = 0; in.yaw = 0.5f; in.pitch = -0.5f;
+		in.buttons = 3; in.forward = 1; in.right = -1; in.up = 0; in.yaw = 0.5f; in.pitch = -0.5f; in.weapon = 4;
 		n = golden("input", want, 64);
 		check(n > 0 && vo_encode_input(got, 10, &in) == n && memcmp(got, want, n) == 0, "input bytes");
-		check(vo_decode_input(want + 8, n - 8, &in2) == 0 && in2.buttons == 3 && in2.right == -1 && in2.pitch == -0.5f, "input decode");
+		check(vo_decode_input(want + 8, n - 8, &in2) == 0 && in2.buttons == 3 && in2.right == -1 && in2.pitch == -0.5f && in2.weapon == 4, "input decode");
 		check(vo_decode_input(want + 8, 4, &in2) == -1, "input short");
+		check(vo_decode_input(want + 8, 24, &in2) == -1, "input without weapon is short");
 	}
 	check(vo_decode(hello, 16, &seq) == VO_MSG_HELLO && seq == 1, "decode hello");
 	check(vo_decode(hello, 4, NULL) == -1, "decode short");
