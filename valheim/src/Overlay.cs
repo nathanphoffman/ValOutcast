@@ -16,8 +16,6 @@ namespace ValOutcast
         private readonly FrameReader _reader = new FrameReader(Path);
         private byte[] _pixels;
         private Texture2D _texture;
-        private Material _material;
-        private bool _materialTried;
         private float _lastChange;
         private bool _show;
         private bool _loggedFirst;
@@ -31,7 +29,8 @@ namespace ValOutcast
         /// <summary>Call every frame.</summary>
         public void Update()
         {
-            if (!PlayerFollow.Active)
+            // Only while playing: not on the title screen or while loading (no player yet), and not while Valheim's own menu is open.
+            if (!PlayerFollow.Active || Player.m_localPlayer == null || Menu.IsVisible())
             {
                 _show = false;
                 return;
@@ -76,34 +75,12 @@ namespace ValOutcast
         {
             if (!_show || _texture == null || Event.current.type != EventType.Repaint) return;
 
-            if (!_materialTried)
-            {
-                _materialTried = true;
-                // This built-in shader blends as premultiplied alpha, which is how the picture is stored.
-                // (Sprites/Default looks similar but multiplies the colors by alpha a second time, which washes out the HUD.)
-                Shader shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply");
-                if (shader != null)
-                {
-                    _material = new Material(shader);
-                    _log("overlay: using premultiplied alpha blending");
-                }
-                else
-                {
-                    _log("overlay: premultiplied shader not found, using plain alpha blending");
-                }
-            }
-
             var rect = new Rect(0f, 0f, Screen.width, Screen.height);
-            if (_material != null)
-            {
-                float b = Mathf.Clamp(Plugin.OverlayBrightness, 0f, 2f);
-                // The color tints the picture's red, green and blue (alpha stays as drawn), which dims it without making it see-through.
-                Graphics.DrawTexture(rect, _texture, new Rect(0f, 0f, 1f, 1f), 0, 0, 0, 0, new Color(b, b, b, 1f), _material);
-            }
-            else
-            {
-                GUI.DrawTexture(rect, _texture, ScaleMode.StretchToFill, true);
-            }
+            float b = Mathf.Clamp(Plugin.OverlayBrightness, 0f, 2f);
+            Color old = GUI.color;
+            GUI.color = new Color(b, b, b, 1f); // dims the picture without making it see-through
+            GUI.DrawTexture(rect, _texture, ScaleMode.StretchToFill, true);
+            GUI.color = old;
         }
 
         public void Close()

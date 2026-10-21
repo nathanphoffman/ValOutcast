@@ -68,14 +68,14 @@ Each phase ends with something you can run and check. Don't start the next one u
 - Valheim samples ground height (and "something is in the way" for trees, rocks, buildings) on a 0.5 m grid around the player and streams it as 8 m chunks (`CollisionSection`). See `protocol/PROTOCOL.md`.
 - Outcast keeps the chunks (`outcast/src/vo_field.cpp`, unit tested with `tools/test_field.sh`) and wraps the player's movement trace (`VO_PlayerTrace`). Over Valheim ground, the level's own walls and floors are ignored.
 - The bridge only switches on when the player is free and standing on the level's floor, and switches off for cutscenes and death. (Turning it on mid-air in an intro made Kyle fall and die, and left a cutscene waiting.)
-- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), objects are just 3 m tall columns (no climbing on them), ground is cut into 0.5 m steps.
+- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), things standing on the ground (trees, rocks, walls) become columns as tall as they really are (low ones, under about half a meter, can be stepped onto; no climbing on anything else), ground is cut into 0.5 m steps.
 - Test without Valheim: `tools/fake_world.py` makes flat ground inside a 6 m ring wall, and Outcast could not walk out of it.
 
 ### Phase 4: Creatures and combat
 **Status:** built. Tested against a fake world: creatures appear as boxes, hits come back, damage kills the player. Not yet tried against real Valheim creatures.
 - Valheim sends creatures within 40 m (`ActorUpsert`, 10 times a second). Outcast makes an invisible box for each (`vo_actor`), so you can walk into it and hit it with anything that hurts entities.
 - Damage taken by a box is sent back (`HitActor`) and the box is healed, so Valheim decides who dies. Valheim turns it into a normal hit on the creature.
-- Hits on the Valheim player are caught, sent to Outcast (`PlayerHurt`) and applied there. Outcast's health is the real one. Valheim damage x4 = Outcast damage. These numbers are guesses and live in `outcast/src/vo_bridge.cpp` (`HURT_SCALE`) and `valheim/src/Combat.cs` (`OutcastToValheim`).
+- Hits on the Valheim player are caught, sent to Outcast (`PlayerHurt`) and applied there. Only attacks and harmful effects from creatures are passed on (falls, drowning and so on are ignored, because the other game moves the player and Valheim would count that as falling). Damage is also ignored for 3 seconds after the two games line up, and one blow can take at most 50 from Outcast's player. Outcast's health is the real one. Valheim damage x4 = Outcast damage. These numbers are guesses and live in `outcast/src/vo_bridge.cpp` (`HURT_SCALE`) and `valheim/src/Combat.cs` (`OutcastToValheim`).
 - Test helpers: `VO_DEBUG_HIT=1` makes the player "hit" the first creature every few seconds.
 
 ### Phase 5: Rendering
@@ -83,7 +83,7 @@ Each phase ends with something you can run and check. Don't start the next one u
 - Outcast draws only its own things (first-person weapon, saber, effects, HUD) on a transparent background and publishes each frame in shared memory (`/dev/shm/valoutcast_frame`, see `protocol/FRAME.md`). Turned on by `VO_OVERLAY=1` (`tools/run_outcast.sh` does it). The level, its people, rain and props are not drawn.
 - Valheim reads the frame (`FrameReader.cs`, tested against a real frame) and draws it over its own picture (`Overlay.cs`). Its camera is forced into first person while Outcast drives.
 - Inspect a frame without Valheim: `tools/dump_frame.py out.png`.
-- Limits: the overlay has no depth, so Outcast's things always draw on top of Valheim's world (nothing hides behind a Valheim wall). Frames go through the CPU (about 3.7 MB each at 1280x720), which should be fine for now. Keep the Outcast window open and not minimized (a minimized window slows down).
+- Limits: the overlay has no depth, so Outcast's things always draw on top of Valheim's world (nothing hides behind a Valheim wall). Frames go through the CPU (about 3.7 MB each at 1280x720), which should be fine for now. The Outcast window is hidden and it draws into an off-screen buffer (`VO_OVERLAY_VISIBLE=1` shows it for debugging), so it never takes focus or the mouse. Cutscenes are skipped automatically in this mode.
 
 ### Phase 6: World sync and polish
 **Status:** partly done.
@@ -91,6 +91,15 @@ Each phase ends with something you can run and check. Don't start the next one u
 - Done: weapon switching (Valheim hotbar keys 1-8 pick a weapon slot, mouse wheel = next/previous weapon), and short clicks are not lost. While Outcast drives, Valheim's own hotbar, build and inventory screens are off (Esc still opens Valheim's menu).
 - Done: Outcast's sound keeps playing when its window is not focused, and the game logic runs at 60 updates a second (`VO_SV_FPS`, default 60) instead of 20, so movement is smooth and responds quicker. Walking speed was checked to be the same at 60.
 - Done: tuning in `BepInEx/config/com.valoutcast.bridge.cfg` (created the first time Valheim runs with the plugin): `MouseDegreesPerCount` (mouse speed, default 1) and `Brightness` (overlay brightness, default 0.85).
+- Done: sound is silent until Valheim is in a world and Outcast has taken over. It is muted again in cutscenes, while loading and after death, and music is off. (`vo_mute` console command, sent by the game code.)
+- Done: Outcast only switches on once Valheim is in a world (Valheim sends input only then), so it idles at Valheim's title screen.
+- Done: while Outcast drives, Valheim's hotbar (the numbered tool slots) is hidden.
+- Done: shots, aiming and the crosshair now use Valheim's ground and creatures, not the hidden Outcast level (before, shots hit the level and the crosshair drifted toward the gun). The level's water, lava and fog are ignored too.
+- Done: `VO_GIVE_ALL` (on in `tools/run_outcast.sh`) gives every weapon, the lightsaber included, and 999 of every ammo type at the start of each level, topped up every half second, for testing.
+- Done: right click (Valheim's "Block") and middle click ("SecondaryAttack") are both Outcast's alternate fire.
+- Done: the lightsaber blade now shows in levels where Kyle starts without his saber (`give all` skipped the saber's setup; the bridge now does it). Models in the picture are lit evenly instead of by the invisible level's lighting (Kyle was a black silhouette in `artus_mine`). The picture is published 45 times a second (`VO_OVERLAY_FPS`), because fast things like bullets can be missed at lower rates.
+- Known: with the lightsaber out, Outcast's camera sits behind and above Kyle (that is how Jedi Outcast shows the saber), so the picture shows his back, while Valheim's camera is at his eyes.
+- Equipment is not linked: Valheim's items and inventory are not connected to Outcast's weapons. Outcast uses its own. Mapping (for example, an equipped Valheim sword to the lightsaber) would be a table that the Valheim plugin sends as a weapon request, but it is not built.
 - Done: plugin parts switch themselves off after one error instead of flooding the log.
 - Not done, on purpose: time of day and weather sync. Outcast only draws the hands and saber, so there is nothing for it to light yet.
 - Not done: save syncing. Loading a Valheim save does not rewind Outcast (and the reverse).

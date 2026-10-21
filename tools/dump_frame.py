@@ -50,9 +50,9 @@ def main():
                 r, g, b, a = row[4 * x:4 * x + 4]
                 back = 90 if ((x // 16 + (h - 1 - y) // 16) % 2) else 150  # checkerboard
                 inv = 255 - a
-                px[3 * x] = min(255, r + back * inv // 255)  # premultiplied: color + background * (1 - alpha)
-                px[3 * x + 1] = min(255, g + back * inv // 255)
-                px[3 * x + 2] = min(255, b + back * inv // 255)
+                px[3 * x] = (r * a + back * inv) // 255      # straight alpha: color * alpha + background * (1 - alpha)
+                px[3 * x + 1] = (g * a + back * inv) // 255
+                px[3 * x + 2] = (b * a + back * inv) // 255
             rows.append(bytes(px))
         covered += sum(1 for x in range(w) if row[4 * x + 3] > 8 or row[4 * x] + row[4 * x + 1] + row[4 * x + 2] > 24)
     write_png(out, w, h, rows, raw_mode)

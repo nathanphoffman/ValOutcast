@@ -31,7 +31,8 @@ namespace ValOutcast
 
         public void Update(VoLink link)
         {
-            if (link == null || !link.Connected || !PlayerFollow.Active || Player.m_localPlayer == null)
+            // Sent whenever you are in a world, even before the other game has taken over: that is how it knows you are playing.
+            if (link == null || !link.Connected || Player.m_localPlayer == null)
             {
                 return;
             }
@@ -71,7 +72,8 @@ namespace ValOutcast
 
             uint buttons = 0;
             if (Button("Attack")) buttons |= VoLink.ButtonAttack;
-            if (Button("SecondaryAttack")) buttons |= VoLink.ButtonAltAttack;
+            // Valheim calls right click "Block" and middle click "SecondaryAttack": both are Outcast's alternate fire.
+            if (Button("SecondaryAttack") || Button("Block")) buttons |= VoLink.ButtonAltAttack;
             if (Button("Use") || Button("AltPlace")) buttons |= VoLink.ButtonUse;
 
             float forward = (Button("Forward") ? 1f : 0f) - (Button("Backward") ? 1f : 0f);

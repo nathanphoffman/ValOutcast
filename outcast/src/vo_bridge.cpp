@@ -16,6 +16,7 @@ static const int KEEP_CHUNKS = 12;  // forget terrain chunks farther than this (
 static const int MAX_PROXIES = 64;
 static const int PROXY_HEALTH = 100000;      // proxies never die here; Valheim decides who is alive
 static const int PROXY_TIMEOUT_MS = 1000;    // drop a proxy this long after the last update
+static const int MAX_HURT = 50;              // one blow from Valheim never takes more than this from the player
 static const float HURT_SCALE = 4.0f;        // Valheim damage points to Outcast damage points (Valheim's player has about 25 health, Outcast's 100)
 static const int INPUT_TIMEOUT_MS = 500;
 
@@ -50,6 +51,17 @@ static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while V
 static qboolean s_inputLive = qfalse;
 static uint32_t s_buttonLatch = 0;   // button presses not yet used by a game frame (a click can be shorter than a frame)
 static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous
+
+typedef void (*VO_TraceFn)(trace_t *, const vec3_t, const vec3_t, const vec3_t, const vec3_t, const int, const int, const EG2_Collision, const int);
+static VO_TraceFn s_realTrace = NULL;   // the game's own trace, which VO_PlayerTrace wraps
+typedef int (*VO_PointContentsFn)(const vec3_t, int);
+static VO_PointContentsFn s_realPointContents = NULL;
+static qboolean s_playerOnField = qfalse;   // the player's own spot is covered by measured Valheim ground
+static qboolean s_audioOn = qfalse;
+static qboolean s_gaveAll = qfalse;
+
+extern void G_Give( gentity_t *ent, const char *name, const char *args, int argc );
+extern void WP_SaberInitBladeData( gentity_t *ent );
 
 static uint32_t VO_NowMs(void)
 {
@@ -148,8 +160,10 @@ static void VO_ApplyPlayerHurt(const vo_hurt *h)
 {
 	gentity_t *player = &g_entities[0];
 	if (!s_active || !player->client || player->health <= 0) return;
-	const int damage = (int)ceilf(h->damage * HURT_SCALE);
+	int damage = (int)ceilf(h->damage * HURT_SCALE);
 	if (damage <= 0) return;
+	if (damage > MAX_HURT) damage = MAX_HURT;
+	gi.Printf("ValOutcast: player hurt by %d (Valheim damage %.0f)\n", damage, h->damage);
 	// h->dir is the direction the blow travels (wire space); G_Damage wants it in Outcast space.
 	vec3_t dir;
 	VO_FromWire(h->dir, dir, 1.0f);
@@ -199,12 +213,25 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 void VO_Init(void)
 {
 	if (s_open) return;
+	// The level's water, lava and fog volumes are part of the invisible level too: over Valheim ground there are none.
+	if (gi.pointcontents != VO_PointContents) {
+		s_realPointContents = gi.pointcontents;
+		gi.pointcontents = VO_PointContents;
+	}
+	// Every trace in the game (walking, shooting, AI) goes through VO_PlayerTrace, so shots hit Valheim's ground
+	// and trees, not the hidden Outcast level.
+	if (gi.trace != VO_PlayerTrace) {
+		s_realTrace = gi.trace;
+		gi.trace = VO_PlayerTrace;
+	}
 	VoField_Clear();
 	s_proxyCount = 0;   // the entities themselves were thrown away with the old level
 	memset(&s_input, 0, sizeof(s_input));
 	s_inputLive = qfalse;
 	s_buttonLatch = 0;
 	s_weaponRequest = 0;
+	s_gaveAll = qfalse;
+	s_audioOn = qfalse;
 	if (vo_link_open(&s_link, VO_ROLE_PLAYER, VO_Log) == 0) {
 		s_link.on_message = VO_OnMessage;
 		s_open = qtrue;
@@ -229,11 +256,33 @@ void VO_Frame(void)
 
 	// Switch on only when the player is free and standing on the level's floor (not mid-air in an intro).
 	// Switch off for cutscenes and death, so scripts that wait for the player behave normally.
+	// It also needs Valheim to be in a world with its player (that is when Valheim sends input).
 	const qboolean free = (!in_camera && !player_locked && ent->health > 0) ? qtrue : qfalse;
+	const qboolean valheimPlaying = (s_link.connected && s_inputMs != 0 && VO_NowMs() - s_inputMs <= 1500u) ? qtrue : qfalse;
 	if (!s_active) {
-		if (free && ent->client->ps.groundEntityNum == ENTITYNUM_WORLD) s_active = qtrue;
-	} else if (!free) {
+		if (free && valheimPlaying && ent->client->ps.groundEntityNum == ENTITYNUM_WORLD) s_active = qtrue;
+	} else if (!free || !valheimPlaying) {
 		s_active = qfalse;
+	}
+
+	// Sound only while really playing: none at the title screen, in cutscenes, while loading, or after death.
+	if (getenv("VO_OVERLAY") && s_active != s_audioOn) {
+		s_audioOn = s_active;
+		gi.SendConsoleCommand(s_audioOn ? "vo_mute 0\n" : "vo_mute 1\n");
+	}
+
+	// Testing aid: every weapon (the lightsaber included) and full ammo, once per level.
+	if (s_active && !s_gaveAll && getenv("VO_GIVE_ALL")) {
+		s_gaveAll = qtrue;
+		const qboolean hadSaber = (ent->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) ? qtrue : qfalse;
+		G_Give(ent, "all", "", 1);
+		// Picking up the saber normally also sets up its blade (and the saber object the blade is drawn from).
+		// "give all" skips that, so a level where Kyle starts without the saber would show no blade.
+		if (!hadSaber) WP_SaberInitBladeData(ent);
+	}
+	// ...and topped up now and then, so nothing runs out while testing (thermal detonators and the like included).
+	if (s_active && s_gaveAll && getenv("VO_GIVE_ALL") && (level.framenum % 30) == 0) {
+		for (int i = AMMO_BLASTER; i < AMMO_MAX; i++) ent->client->ps.ammo[i] = 999;
 	}
 
 	if (s_weaponRequest != 0) {
@@ -257,7 +306,8 @@ void VO_Frame(void)
 		VO_SendProxyHits(ent);
 	}
 
-	if (getenv("VO_DEBUG_SKIP") && in_camera && (level.framenum % 40) == 0) {
+	// Overlay mode skips cutscenes by itself: the Outcast window is hidden, so nobody could press a key, and the level is not drawn anyway.
+	if ((getenv("VO_DEBUG_SKIP") || getenv("VO_OVERLAY")) && in_camera && (level.framenum % 20) == 0 && gi.Cvar_VariableIntegerValue("skippingCinematic") == 0) {
 		gi.SendConsoleCommand("exitview\n");  // test helper: skip cutscenes with no one at the keyboard
 	}
 
@@ -289,6 +339,7 @@ void VO_Frame(void)
 	}
 
 	qboolean onField = (s_active && VoField_Covers(ent->client->ps.origin)) ? qtrue : qfalse;
+	s_playerOnField = onField;
 	if (onField != s_onField) {
 		s_onField = onField;
 		gi.Printf("ValOutcast: %s (%d chunks)\n", onField ? "now on Valheim ground" : "left Valheim ground",
@@ -305,19 +356,29 @@ void VO_Shutdown(void)
 	s_open = qfalse;
 	s_onField = qfalse;
 	s_active = qfalse;
+	s_playerOnField = qfalse;
+}
+
+int VO_PointContents(const vec3_t point, int passEntityNum)
+{
+	const int contents = s_realPointContents(point, passEntityNum);
+	if (!s_open || !s_active || !s_playerOnField) return contents;
+	return contents & (CONTENTS_BODY | CONTENTS_CORPSE);   // only creatures and bodies, not the level's own volumes
 }
 
 void VO_PlayerTrace(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end,
                     const int passEntityNum, const int contentMask, const EG2_Collision eG2TraceType, const int useLod)
 {
-	if (!s_open || !s_active || !VoField_Covers(start)) {
-		gi.trace(results, start, mins, maxs, end, passEntityNum, contentMask, eG2TraceType, useLod);
+	// Once the player stands on Valheim ground, the hidden level is ignored for every trace, wherever it starts or ends
+	// (otherwise a shot that flies out of the measured area would hit the hidden level and make smoke there).
+	if (!s_open || !s_active || !s_playerOnField) {
+		s_realTrace(results, start, mins, maxs, end, passEntityNum, contentMask, eG2TraceType, useLod);
 		return;
 	}
 
 	// Over Valheim ground: the level's own solid brushes are ignored (other entities still count).
 	const unsigned int mask = (unsigned int)contentMask & ~(CONTENTS_SOLID | CONTENTS_PLAYERCLIP);
-	gi.trace(results, start, mins, maxs, end, passEntityNum, (int)mask, eG2TraceType, useLod);
+	s_realTrace(results, start, mins, maxs, end, passEntityNum, (int)mask, eG2TraceType, useLod);
 
 	static const vec3_t zero = {0, 0, 0};
 	const float *bmins = mins ? mins : zero;

@@ -11,7 +11,7 @@ index 6c24eb2..4461793 100644
  		"${SPDir}/rd-vanilla/tr_cmds.cpp"
  		"${SPDir}/rd-vanilla/tr_curve.cpp"
 diff --git a/code/rd-vanilla/tr_backend.cpp b/code/rd-vanilla/tr_backend.cpp
-index 741bb95..c2b82c9 100644
+index 741bb95..639f50b 100644
 --- a/code/rd-vanilla/tr_backend.cpp
 +++ b/code/rd-vanilla/tr_backend.cpp
 @@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -31,9 +31,19 @@ index 741bb95..c2b82c9 100644
  		}
  		else
  		{
-@@ -1405,6 +1406,12 @@ const void	*RB_DrawBuffer( const void *data ) {
+@@ -1403,8 +1404,21 @@ const void	*RB_DrawBuffer( const void *data ) {
  
- 	qglDrawBuffer( cmd->buffer );
+ 	cmd = (const drawBufferCommand_t *)data;
+ 
+-	qglDrawBuffer( cmd->buffer );
++	if ( VO_OverlayEnabled() )
++	{
++		VO_OverlayBeginFrame();	// draw into the off-screen buffer
++	}
++	else
++	{
++		qglDrawBuffer( cmd->buffer );
++	}
  
 +	if ( VO_OverlayEnabled() )
 +	{	// overlay mode: every frame starts fully transparent
@@ -44,16 +54,21 @@ index 741bb95..c2b82c9 100644
  		// clear screen for debugging
  	if (!( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) && tr.world && tr.refdef.rdflags & RDF_doLAGoggles)
  	{
-@@ -1568,6 +1575,8 @@ const void	*RB_SwapBuffers( const void *data ) {
+@@ -1568,7 +1582,12 @@ const void	*RB_SwapBuffers( const void *data ) {
  
      GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
  
+-	ri.WIN_Present(&window);
 +	VO_OverlayPublish();
 +
- 	ri.WIN_Present(&window);
++	if ( !VO_OverlayEnabled() )	// nothing is drawn to the window in overlay mode
++	{
++		ri.WIN_Present(&window);
++	}
  
  	backEnd.projection2D = qfalse;
-@@ -1586,7 +1595,10 @@ const void	*RB_WorldEffects( const void *data )
+ 
+@@ -1586,7 +1605,10 @@ const void	*RB_WorldEffects( const void *data )
  	{
  		RB_EndSurface();
  	}
@@ -65,6 +80,34 @@ index 741bb95..c2b82c9 100644
  
  	if(tess.shader)
  	{
+diff --git a/code/rd-vanilla/tr_light.cpp b/code/rd-vanilla/tr_light.cpp
+index d176af5..b883a7f 100644
+--- a/code/rd-vanilla/tr_light.cpp
++++ b/code/rd-vanilla/tr_light.cpp
+@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
+ #include "../server/exe_headers.h"
+ 
+ #include "tr_local.h"
++#include "vo_overlay.h"
+ 
+ #define	DLIGHT_AT_RADIUS		16
+ // at the edge of a dlight's influence, this amount of light will be added
+@@ -142,6 +143,15 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
+ 	float			totalFactor;
+ 	unsigned short	*startGridPos;
+ 
++	if ( VO_OverlayEnabled() )
++	{	// overlay mode: the level is not drawn, so its lighting means nothing. Light everything evenly instead of leaving it black.
++		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 150.0;
++		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 130.0;
++		VectorSet( ent->lightDir, 0.25f, 0.35f, 0.9f );
++		VectorNormalize( ent->lightDir );
++		return;
++	}
++
+ 	if (r_fullbright->integer || (tr.refdef.rdflags & RDF_doLAGoggles) )
+ 	{
+ 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
 diff --git a/code/rd-vanilla/tr_world.cpp b/code/rd-vanilla/tr_world.cpp
 index 4a472e2..fd7b8a4 100644
 --- a/code/rd-vanilla/tr_world.cpp
@@ -121,6 +164,49 @@ index bad8c73..4b00000 100644
  
  	//we must have restarted the game
  	if (!cent->gent)
+diff --git a/codeJK2/cgame/cg_predict.cpp b/codeJK2/cgame/cg_predict.cpp
+index 8c73e52..81d4641 100644
+--- a/codeJK2/cgame/cg_predict.cpp
++++ b/codeJK2/cgame/cg_predict.cpp
+@@ -148,10 +148,28 @@ void CG_ClipMoveToEntities ( const vec3_t start, const vec3_t mins, const vec3_t
+ CG_Trace
+ ================
+ */
++// ValOutcast overlay mode (VO_OVERLAY set): the Outcast level is invisible and only Valheim's world matters, so
++// the client side (crosshair, effects) must not see the level's walls, water or fog either.
++static qboolean VO_OverlayMode( void )
++{
++	static int overlay = -1;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	return overlay == 1 ? qtrue : qfalse;
++}
++
+ void	CG_Trace( trace_t *result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end,
+ 					 const int skipNumber, const int mask, const EG2_Collision eG2TraceType/*=G2_NOCOLLIDE*/, const int useLod/*=0*/) {
+ 	trace_t	t;
+ 
++	if ( VO_OverlayMode() ) {
++		memset( &t, 0, sizeof( t ) );
++		t.fraction = 1.0f;
++		VectorCopy( end, t.endpos );
++		t.entityNum = ENTITYNUM_NONE;
++		*result = t;
++		return;
++	}
++
+ 	cgi_CM_BoxTrace ( &t, start, end, mins, maxs, 0, mask);
+ 	t.entityNum = t.fraction != 1.0 ? ENTITYNUM_WORLD : ENTITYNUM_NONE;
+ 	// check all other solid models
+@@ -166,6 +184,9 @@ CG_PointContents
+ ================
+ */
+ int		CG_PointContents( const vec3_t point, int passEntityNum ) {
++	if ( VO_OverlayMode() ) {
++		return 0;
++	}
+ 	int			i;
+ 	entityState_t	*ent;
+ 	centity_t	*cent;
 diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
 index 2790dc8..6242832 100644
 --- a/codeJK2/game/CMakeLists.txt
@@ -203,21 +289,71 @@ index 671b309..844817b 100644
  	level.previousTime = level.time;
  	level.time = levelTime;
 diff --git a/shared/sdl/sdl_sound.cpp b/shared/sdl/sdl_sound.cpp
-index 45e5a88..347daa2 100644
+index 45e5a88..71fedd4 100644
 --- a/shared/sdl/sdl_sound.cpp
 +++ b/shared/sdl/sdl_sound.cpp
-@@ -313,6 +313,9 @@ extern int s_UseOpenAL;
+@@ -148,6 +148,9 @@ static int SNDDMA_ExpandSampleFrequencyKHzToHz(int khz)
+ SNDDMA_Init
+ ===============
+ */
++static bool VO_Overlay( void );
++static void VO_Mute_f( void );
++
+ qboolean SNDDMA_Init(int sampleFrequencyInKHz)
+ {
+ 	SDL_AudioSpec desired;
+@@ -251,6 +254,16 @@ qboolean SNDDMA_Init(int sampleFrequencyInKHz)
+ 	Com_Printf("Starting SDL audio callback...\n");
+ 	SDL_PauseAudioDevice(dev, 0);  // start callback.
+ 
++	if ( VO_Overlay() ) {
++		// Start silent: the game code unmutes when the player is really playing (see vo_bridge.cpp).
++		static bool commandAdded = false;
++		if ( !commandAdded ) {
++			Cmd_AddCommand( "vo_mute", VO_Mute_f );
++			commandAdded = true;
++		}
++		SDL_PauseAudioDevice( dev, 1 );
++	}
++
+ 	Com_Printf("SDL audio initialized.\n");
+ 	snd_inited = qtrue;
+ 	return qtrue;
+@@ -310,8 +323,32 @@ void SNDDMA_BeginPainting (void)
+ extern int s_UseOpenAL;
+ #endif
+ 
++static void VO_SetOutput( qboolean activate );
++
++// ValOutcast overlay mode: the game is played from another window, so Outcast's sound is not switched by window
++// focus. The game code switches it with the console command "vo_mute 1" or "vo_mute 0" instead.
++static void VO_Mute_f( void )
++{
++	const qboolean mute = ( Cmd_Argc() > 1 && atoi( Cmd_Argv( 1 ) ) != 0 ) ? qtrue : qfalse;
++	Com_Printf( "ValOutcast: sound %s\n", mute ? "muted" : "on" );
++	VO_SetOutput( (qboolean)!mute );
++}
++
++static bool VO_Overlay( void )
++{
++	static int overlay = -1;
++	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
++	return overlay == 1;
++}
++
  // (De)activates sound playback
  void SNDDMA_Activate( qboolean activate )
- {
-+	// ValOutcast overlay mode: the game is played from another window, so Outcast's sound must not stop when it loses focus
-+	if ( getenv( "VO_OVERLAY" ) && !activate ) return;
++{
++	if ( VO_Overlay() ) return;
++	VO_SetOutput( activate );
++}
 +
++static void VO_SetOutput( qboolean activate )
+ {
  #ifdef USE_OPENAL
  	if ( s_UseOpenAL )
- 	{
 diff --git a/shared/sdl/sdl_window.cpp b/shared/sdl/sdl_window.cpp
-index 18daa06..7109654 100644
+index 18daa06..86e4347 100644
 --- a/shared/sdl/sdl_window.cpp
 +++ b/shared/sdl/sdl_window.cpp
 @@ -19,6 +19,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
@@ -228,7 +364,17 @@ index 18daa06..7109654 100644
  #include <SDL.h>
  #include <SDL_syswm.h>
  #include "qcommon/qcommon.h"
-@@ -516,6 +517,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
+@@ -322,7 +323,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
+ 	int samples;
+ 	int i = 0;
+ 	SDL_Surface *icon = NULL;
+-	Uint32 flags = SDL_WINDOW_SHOWN;
++	// ValOutcast overlay mode: the window stays hidden (the picture is drawn off-screen), unless VO_OVERLAY_VISIBLE is set
++	Uint32 flags = ( getenv( "VO_OVERLAY" ) && !getenv( "VO_OVERLAY_VISIBLE" ) ) ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN;
+ 	SDL_DisplayMode desktopMode;
+ 	int display = 0;
+ 	int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
+@@ -516,6 +518,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
  			SDL_GL_SetAttribute( SDL_GL_RED_SIZE, perChannelColorBits );
  			SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, perChannelColorBits );
  			SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, perChannelColorBits );

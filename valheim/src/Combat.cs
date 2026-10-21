@@ -96,13 +96,44 @@ namespace ValOutcast
     [HarmonyPatch(typeof(Character), "RPC_Damage")]
     internal static class PlayerDamagePatch
     {
+        /// <summary>Right after the two games line up, damage is ignored: Valheim may still be settling the player.</summary>
+        private const float GraceSeconds = 3f;
+
+        // Only attacks and harmful effects from creatures are passed on. Falls, drowning, the edge of the world and
+        // so on are Valheim's own business: the other game moves the player, so they would be wrong.
+        private static bool Passes(HitData.HitType type)
+        {
+            switch (type)
+            {
+                case HitData.HitType.EnemyHit:
+                case HitData.HitType.Burning:
+                case HitData.HitType.Freezing:
+                case HitData.HitType.Poisoned:
+                case HitData.HitType.Turret:
+                case HitData.HitType.Catapult:
+                case HitData.HitType.CinderFire:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         private static bool Prefix(Character __instance, HitData hit)
         {
             if (__instance != Player.m_localPlayer || !PlayerFollow.Active || Plugin.Link == null) return true;
 
+            float damage = hit.GetTotalDamage();
+            bool grace = Time.unscaledTime - PlayerFollow.AnchoredAt < GraceSeconds;
+            if (grace || !Passes(hit.m_hitType))
+            {
+                Plugin.LogMessage("damage ignored: " + damage.ToString("0") + " (" + hit.m_hitType + (grace ? ", just started" : "") + ")");
+                return false; // the Valheim stand-in takes no damage of its own either
+            }
+
             Vector3 dir = hit.m_dir;
             // Unity to wire: flip Z.
-            Plugin.Link.SendPlayerHurt(hit.GetTotalDamage(), new[] { dir.x, dir.y, -dir.z }, 0);
+            Plugin.Link.SendPlayerHurt(damage, new[] { dir.x, dir.y, -dir.z }, 0);
+            Plugin.LogMessage("damage sent to Outcast: " + damage.ToString("0") + " (" + hit.m_hitType + ")");
             return false;
         }
     }

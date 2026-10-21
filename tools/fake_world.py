@@ -2,6 +2,9 @@
 """Pretend to be the world side (Valheim) so the player side can be tested alone.
 
 Options: --walk   send Input (walk forward, slowly turning) as if the Valheim window were being played
+         --fire   hold the primary attack button
+         --alt    hold the alternate attack button
+         --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting
          --nowall leave out the ring wall (flat ground all around)
          --hurt   send PlayerHurt (10 damage) every 8 seconds
 
@@ -25,6 +28,9 @@ NOWALL = "--nowall" in sys.argv
 if NOWALL:
     WALL_M = 0.0
 HURT = "--hurt" in sys.argv
+FIRE = "--fire" in sys.argv
+ALT = "--alt" in sys.argv
+WEAPON = int(sys.argv[sys.argv.index("--weapon") + 1]) if "--weapon" in sys.argv else 0
 
 
 def build_chunk(cx, cz, ax, ay, az):
@@ -63,6 +69,8 @@ last_pos = None
 last_actors = 0
 last_hurt = time.time()
 last_input = 0
+started_at = None
+weapon_sent = False
 last_print = 0
 last_field = 0
 try:
@@ -71,6 +79,17 @@ try:
         link.tick()
         if link.connected and not was_connected:
             anchor = None
+        now = time.time()
+        if now - last_input > 1 / 60:
+            # Input is also how the world side says "I am in a world and playing": send it even when standing still.
+            last_input = now
+            forward = 1.0 if WALK else 0.0
+            yaw = 0.0 if (NOWALL or not WALK) else 0.5
+            buttons = (vo.BUTTON_ATTACK if FIRE else 0) | (vo.BUTTON_ALT_ATTACK if ALT else 0)
+            weapon = 0
+            if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:
+                weapon, weapon_sent = WEAPON, True
+            link.send_raw(lambda seq: vo.encode_input(seq, buttons, forward, 0.0, 0.0, yaw, 0.0, weapon))
         if link.player_state:
             pos, look = link.player_state
             now = time.time()
@@ -80,6 +99,7 @@ try:
             last_pos = pos
             if anchor is None:
                 anchor = pos
+                started_at = now
                 link.send_collision_reset()
                 send_field(link, *anchor)
                 last_field = now
@@ -90,9 +110,6 @@ try:
             if now - last_actors > 0.1:
                 last_actors = now
                 send_actors(link, *anchor, now)
-            if WALK and now - last_input > 1 / 60:
-                last_input = now
-                link.send_raw(lambda seq: vo.encode_input(seq, 0, 1.0, 0.0, 0.0, 0.0 if NOWALL else 0.5, 0.0))
             if HURT and now - last_hurt > 8:
                 last_hurt = now
                 link.send_raw(lambda seq: vo.encode_player_hurt(seq, 10.0, (0.0, 0.0, -1.0), 0))

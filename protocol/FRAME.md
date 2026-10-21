@@ -17,6 +17,8 @@ This is a separate channel from the UDP protocol in `PROTOCOL.md`, because it is
 
 Reading: read the counter, copy the pixels, read the counter again. Use the copy only if both reads were the same even number.
 
-Pixels are close to *premultiplied* alpha: red, green and blue are already scaled by how much the pixel is covered. Where Outcast drew additive glow, the pixel has color but little or no alpha, which adds light when drawn over Valheim with the blend `result = pixel.rgb + background * (1 - pixel.a)`.
+Pixels use ordinary (straight) alpha: red, green and blue are the color, alpha is how much it covers. Outcast converts from its own premultiplied drawing before publishing. Light with no coverage (additive glow) comes through as a see-through colored pixel.
 
-The size is whatever size the Outcast window is. Valheim stretches it to its own screen, so start Outcast with the same shape as the Valheim window (see `tools/run_outcast.sh`).
+Frames are published at most 45 times a second by default (`VO_OVERLAY_FPS` changes it), because copying a frame out of the graphics card is the slow part. Valheim only needs to draw the picture again when the counter changes.
+
+The size is whatever size the Outcast window is. Valheim stretches it to its own screen, so start Outcast with the same shape as the Valheim window (see `tools/run_outcast.sh`). The Outcast window itself stays hidden.

@@ -15,6 +15,8 @@ namespace ValOutcast
 
         private static readonly AccessTools.FieldRef<Character, Rigidbody> BodyRef =
             AccessTools.FieldRefAccess<Character, Rigidbody>("m_body");
+        private static readonly AccessTools.FieldRef<Character, float> MaxAirAltitudeRef =
+            AccessTools.FieldRefAccess<Character, float>("m_maxAirAltitude");
         private static readonly AccessTools.FieldRef<Character, GameObject> VisualRef =
             AccessTools.FieldRefAccess<Character, GameObject>("m_visual");
 
@@ -39,6 +41,9 @@ namespace ValOutcast
 
         /// <summary>Goes up by one every time the mapping between the two games changes.</summary>
         public static int AnchorGeneration { get; private set; }
+
+        /// <summary>Real time of the last time the mapping changed.</summary>
+        public static float AnchoredAt { get; private set; }
 
         /// <summary>Where the Valheim player is right now (smoothed), and where it looks.</summary>
         public static bool HasCurrent => _hasSample;
@@ -135,6 +140,7 @@ namespace ValOutcast
                     _anchorWorld.y = groundY;
                 }
                 AnchorGeneration++;
+                AnchoredAt = Time.unscaledTime;
                 _hasSample = false;
             }
 
@@ -163,6 +169,8 @@ namespace ValOutcast
             Rigidbody body = BodyRef(player);
             body.position = _currentPos;
             body.linearVelocity = Vector3.zero;
+            // The body is moved around by the other game, so Valheim must not count that as falling (fall damage).
+            MaxAirAltitudeRef(player) = _currentPos.y;
             player.transform.position = _currentPos;
             if (_currentLook.sqrMagnitude > 0.0001f) player.SetLookDir(_currentLook);
         }

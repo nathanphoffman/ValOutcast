@@ -46,12 +46,14 @@ Then make `third_party/jk2run` with links to the three built files and your game
 ## Run
 
 1. Start Valheim, load a world, and wait until your character is standing on the ground.
-2. Run `tools/run_outcast.sh` (optionally: `tools/run_outcast.sh artus_mine 1280 720`). Use the same shape as your Valheim window. Leave the Outcast window open behind Valheim, not minimized.
-3. Wait for the Outcast cutscene to finish, then click the Valheim window and play there.
+2. Run `tools/run_outcast.sh` (optionally: `tools/run_outcast.sh artus_mine 1280 720`). Use the same shape as your Valheim window. The Outcast window stays hidden (it draws into an off-screen buffer, so it can't take focus or grab your mouse), and Outcast's cutscenes are skipped automatically. Set `VO_OVERLAY_VISIBLE=1` to show its window when debugging.
+3. Play in the Valheim window.
 
 ## Controls and tuning
 
 While Outcast drives: WASD, mouse, jump, crouch, left and right click and Use work as in Valheim. The hotbar number keys 1-8 pick an Outcast weapon, and the mouse wheel goes to the next or previous one. Esc still opens Valheim's menu.
+
+`tools/run_outcast.sh` gives you every weapon, the lightsaber included, for testing (`VO_GIVE_ALL=` with nothing after it turns that off). Outcast stays silent until you are in a Valheim world.
 
 Settings are in `BepInEx/config/com.valoutcast.bridge.cfg` inside the Valheim folder (created on the first run): `MouseDegreesPerCount` (mouse speed) and `Brightness` (overlay brightness). Set `VO_SV_FPS` before `tools/run_outcast.sh` to change how often Outcast's game logic runs (default 60; Outcast itself uses 20).
 

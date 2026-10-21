@@ -9,6 +9,7 @@ namespace ValOutcast
     public class Plugin : BaseUnityPlugin
     {
         public static VoLink Link;
+        public static Action<string> LogMessage = _ => { };
 
         /// <summary>Degrees of turning per mouse movement (on top of Valheim's own mouse sensitivity setting).</summary>
         public static float MouseDegreesPerCount = 1f;
@@ -19,12 +20,15 @@ namespace ValOutcast
         private readonly CreatureStreamer _creatures = new CreatureStreamer();
         private readonly InputForwarder _input = new InputForwarder();
         private Overlay _overlay;
+        private readonly HudHider _hud = new HudHider();
+        private PerfStats _perf;
 
         // A part that throws is switched off after logging once, so one bug can't flood the log or stop the others.
-        private bool _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
+        private bool _hudOk = true, _followOk = true, _streamerOk = true, _creaturesOk = true, _inputOk = true, _overlayOk = true;
 
         private void Awake()
         {
+            LogMessage = msg => Logger.LogInfo(msg);
             Logger.LogInfo("ValOutcast hello: plugin loaded");
             MouseDegreesPerCount = Config.Bind("Input", "MouseDegreesPerCount", 1f,
                 "How far the view turns per mouse movement. Higher is faster. Valheim's own mouse sensitivity setting applies on top.").Value;
@@ -41,6 +45,7 @@ namespace ValOutcast
                 Logger.LogError("could not open link (port " + VoLink.PortWorld + " in use?): " + e.Message);
             }
             _overlay = new Overlay(msg => Logger.LogInfo(msg));
+            _perf = new PerfStats(msg => Logger.LogInfo(msg));
             try
             {
                 _harmony = new Harmony("com.valoutcast.bridge");
@@ -57,7 +62,7 @@ namespace ValOutcast
             if (!ok) return;
             try
             {
-                action();
+                _perf.Measure(name, action);
             }
             catch (Exception e)
             {
@@ -74,6 +79,8 @@ namespace ValOutcast
             Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
             Run(ref _inputOk, "input", () => _input.Update(Link));
             Run(ref _overlayOk, "overlay", () => _overlay.Update());
+            Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && Player.m_localPlayer != null));
+            _perf.EndFrame(PlayerFollow.Active);
         }
 
         private void OnGUI()

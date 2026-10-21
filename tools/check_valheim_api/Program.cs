@@ -37,6 +37,7 @@ class Program
             for (Type c = t; c != null && f == null; c = c.BaseType) f = c.GetField(name, All);
             Report(f != null && (fieldType == null || f.FieldType.Name == fieldType), type + "." + name);
         }
+        void Type(string type) => Report(Find(type) != null, type);
         void Property(string type, string name)
         {
             Type t = Find(type);
@@ -63,6 +64,8 @@ class Program
         Field("Character", "m_body", "Rigidbody");
         Method("GameCamera", "UpdateCamera", 1);
         Field("Character", "m_visual", "GameObject");
+        Field("Character", "m_maxAirAltitude", "Single");
+        Field("HitData", "m_hitType");
         Field("Character", "m_eye");
         Property("GameCamera", "instance");
         // Creatures and damage
@@ -91,6 +94,7 @@ class Program
         foreach (var (type, m) in new[] { ("Menu", "IsVisible"), ("Console", "IsVisible"), ("TextInput", "IsVisible"), ("InventoryGui", "IsVisible"), ("StoreGui", "IsVisible"), ("Minimap", "IsOpen") })
             Method(type, m, 0);
         Method("Chat", "HasFocus", 0);
+        Type("HotkeyBar");
 
         Console.WriteLine(missing == 0 ? "all Valheim hooks found" : missing + " Valheim hooks missing");
         return missing == 0 ? 0 : 1;

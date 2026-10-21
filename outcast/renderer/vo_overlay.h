@@ -10,6 +10,9 @@
 bool VO_OverlayEnabled(void);
 // Replacement for qglBlendFunc: also keeps the alpha channel meaningful (see vo_overlay.cpp).
 void VO_BlendFunc(GLenum src, GLenum dst);
+// Call at the start of every frame, before anything is drawn. In overlay mode the picture goes into an
+// off-screen buffer instead of the window, so the window can stay hidden.
+void VO_OverlayBeginFrame(void);
 // Call right before the frame is shown.
 void VO_OverlayPublish(void);
 
