@@ -50,7 +50,7 @@ static uint32_t s_inputMs = 0;
 static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while Valheim drives the view
 static qboolean s_inputLive = qfalse;
 static uint32_t s_buttonLatch = 0;   // button presses not yet used by a game frame (a click can be shorter than a frame)
-static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous
+static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous, 12 Valheim tool mode on (weapon put away), 13 tool mode off
 
 typedef void (*VO_TraceFn)(trace_t *, const vec3_t, const vec3_t, const vec3_t, const vec3_t, const int, const int, const EG2_Collision, const int);
 static VO_TraceFn s_realTrace = NULL;   // the game's own trace, which VO_PlayerTrace wraps
@@ -311,10 +311,19 @@ void VO_Frame(void)
 	if (s_weaponRequest != 0) {
 		if (s_active) {
 			char cmd[32];
-			if (s_weaponRequest == 10) Com_sprintf(cmd, sizeof(cmd), "weapnext\n");
+			if (s_weaponRequest == 12) {
+				// Valheim tool mode: the player holds a Valheim item, so Outcast's weapon is not drawn. The lightsaber is
+				// swapped for a gun first, because with the saber Outcast's camera goes behind the player.
+				if (ent->client->ps.weapon == WP_SABER) gi.SendConsoleCommand("weapon 3\n");
+				gi.cvar_set("cg_drawGun", "0");
+				cmd[0] = 0;
+			} else if (s_weaponRequest == 13) {
+				gi.cvar_set("cg_drawGun", "1");
+				cmd[0] = 0;
+			} else if (s_weaponRequest == 10) Com_sprintf(cmd, sizeof(cmd), "weapnext\n");
 			else if (s_weaponRequest == 11) Com_sprintf(cmd, sizeof(cmd), "weapprev\n");
 			else Com_sprintf(cmd, sizeof(cmd), "weapon %d\n", s_weaponRequest);
-			gi.SendConsoleCommand(cmd);
+			if (cmd[0]) gi.SendConsoleCommand(cmd);
 		}
 		s_weaponRequest = 0;
 	}

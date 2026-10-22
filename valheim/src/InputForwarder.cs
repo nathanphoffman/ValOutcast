@@ -18,6 +18,12 @@ namespace ValOutcast
             return ZInput.GetButton(name);
         }
 
+        /// <summary>Asks the player side for a weapon change (see the weapon request in protocol/PROTOCOL.md). Sent with the next input packet.</summary>
+        public void RequestWeapon(int request)
+        {
+            _weapon = request;
+        }
+
         internal static bool MenuOpen()
         {
             return Menu.IsVisible()
@@ -38,9 +44,9 @@ namespace ValOutcast
             }
 
             bool open = MenuOpen();
-            if (!open)
+            if (!open && !ToolMode.Active)
             {
-                // Weapon keys: the hotbar number keys pick a slot, the mouse wheel goes to the next or previous weapon.
+                // Weapon keys (in tool mode they belong to Valheim's hotbar): the hotbar number keys pick a slot, the mouse wheel goes to the next or previous weapon.
                 for (int i = 1; i <= 8; i++)
                 {
                     if (ZInput.GetButtonDown("Hotbar" + i) || ZInput.GetButtonDown("Hotbar" + i + "Alt")) _weapon = i;
@@ -71,10 +77,13 @@ namespace ValOutcast
             }
 
             uint buttons = 0;
-            if (Button("Attack")) buttons |= VoLink.ButtonAttack;
-            // Valheim calls right click "Block" and middle click "SecondaryAttack": both are Outcast's alternate fire.
-            if (Button("SecondaryAttack") || Button("Block")) buttons |= VoLink.ButtonAltAttack;
-            if (Button("Use") || Button("AltPlace")) buttons |= VoLink.ButtonUse;
+            if (!ToolMode.Active)   // in tool mode the buttons belong to Valheim's item
+            {
+                if (Button("Attack")) buttons |= VoLink.ButtonAttack;
+                // Valheim calls right click "Block" and middle click "SecondaryAttack": both are Outcast's alternate fire.
+                if (Button("SecondaryAttack") || Button("Block")) buttons |= VoLink.ButtonAltAttack;
+                if (Button("Use") || Button("AltPlace")) buttons |= VoLink.ButtonUse;
+            }
 
             float forward = (Button("Forward") ? 1f : 0f) - (Button("Backward") ? 1f : 0f);
             float right = (Button("Right") ? 1f : 0f) - (Button("Left") ? 1f : 0f);

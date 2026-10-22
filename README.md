@@ -55,7 +55,7 @@ While Outcast drives: WASD, mouse, jump, crouch, left and right click and Use wo
 
 `tools/run_outcast.sh` gives you every weapon, the lightsaber included, for testing (`VO_GIVE_ALL=` with nothing after it turns that off). Outcast stays silent until you are in a Valheim world.
 
-E (Use) works on what the crosshair is over: doors, berries, items on the ground. Chests, crafting stations and signs do not work yet (they need Valheim's menus). Shots and the lightsaber damage trees, rocks and ore.
+R switches between Outcast weapons and Valheim's own items (tool mode: sword, bow, hammer, hoe, torch). In tool mode the hotbar comes back and Valheim handles the mouse buttons; press R again to go back to Outcast. E (Use) works on what the crosshair is over: doors, berries, items on the ground. Chests, crafting stations and signs do not work yet (they need Valheim's menus). Shots and the lightsaber damage trees, rocks and ore.
 
 Testing aid: F8 (in Valheim) spawns a boar 6 m in front of you, to try Outcast's weapons on. The Valheim log (`BepInEx/LogOutput.log`) shows `hit applied ...` lines when Outcast's hits reach a creature.
 

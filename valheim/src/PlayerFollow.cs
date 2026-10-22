@@ -128,7 +128,8 @@ namespace ValOutcast
             _currentLook = Vector3.Slerp(_prevLook, _latestLook, t);
 
             Place(player);
-            if (!_hidden) ShowBody(player, false); // Outcast draws the hands; Valheim's own body would only get in the way
+            // Outcast draws the hands, so Valheim's own body would only get in the way. In tool mode it is Valheim's arms and item that are used.
+            if (_hidden == ToolMode.Active) ShowBody(player, ToolMode.Active);
         }
 
         private static void AddSample(VoLink link, Player player)
@@ -216,7 +217,7 @@ namespace ValOutcast
     {
         private static bool Prefix(ref bool __result)
         {
-            if (PlayerFollow.Active)
+            if (PlayerFollow.Active && !ToolMode.Active)
             {
                 __result = false;
                 return false;
@@ -241,7 +242,7 @@ namespace ValOutcast
     {
         private static bool Prefix(ref bool __result)
         {
-            if (PlayerFollow.Active)
+            if (PlayerFollow.Active && !ToolMode.Active)
             {
                 __result = false;
                 return false;

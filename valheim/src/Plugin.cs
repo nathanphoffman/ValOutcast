@@ -36,6 +36,8 @@ namespace ValOutcast
             Logger.LogInfo("ValOutcast hello: plugin loaded");
             MouseDegreesPerCount = Config.Bind("Input", "MouseDegreesPerCount", 1f,
                 "How far the view turns per mouse movement. Higher is faster. Valheim's own mouse sensitivity setting applies on top.").Value;
+            ToolMode.Configure(Config.Bind("Input", "ToolModeKey", "R",
+                "Key that switches between Outcast's weapons and Valheim's own items (sword, bow, hammer, hoe, torch). A Unity KeyCode name, for example R or V.").Value);
             OverlayBrightness = Config.Bind("Overlay", "Brightness", 0.85f,
                 "Brightness of Outcast's picture drawn over Valheim. 1 is as drawn, lower is dimmer.").Value;
             // Keep updating the link while the other game's window has focus.
@@ -80,6 +82,7 @@ namespace ValOutcast
             Link?.Tick();
             // Order matters for the 1:1 frame sync: send this frame's input, ask Outcast for the picture and wait for it,
             // then read the position Outcast sent while making it, so the picture and the camera come from the same Outcast frame.
+            ToolMode.Update(_input);
             Run(ref _inputOk, "input", () => _input.Update(Link));
             Run(ref _overlayOk, "overlay", () => _overlay.Update());
             Link?.Tick();
@@ -87,10 +90,10 @@ namespace ValOutcast
             Run(ref _streamerOk, "terrain", () => _streamer.Update(Link));
             Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
             Run(ref _worldHitsOk, "worldhits", () => _worldHits.Update(Link));
-            Run(ref _interactOk, "interact", () => _interactor.Update());
+            Run(ref _interactOk, "interact", () => { if (!ToolMode.Active) _interactor.Update(); });
             _spawner.Update();
             Run(ref _lightOk, "light", () => _light.Update(Link));
-            Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && Player.m_localPlayer != null));
+            Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && !ToolMode.Active && Player.m_localPlayer != null));
             _perf.EndFrame(PlayerFollow.Active);
         }
 

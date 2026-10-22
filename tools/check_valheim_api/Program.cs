@@ -55,6 +55,9 @@ class Program
         Method("Player", "TakeInput", 0);
         Method("Player", "Interact", 3);
         Method("Player", "GetHoverObject", 0);
+        Method("Player", "SetControls", 12);
+        Method("Humanoid", "HideHandItems", 2);
+        Method("Humanoid", "ShowHandItems", 2);
         Type("IDestructible");
         Type("WearNTear");
         Type("Container");
