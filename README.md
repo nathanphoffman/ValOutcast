@@ -7,7 +7,7 @@ A bridge between **Star Wars Jedi Knight: Jedi Outcast** and **Valheim**, inspir
 
 Each game runs normally. A small plugin in each one passes messages to the other. See [docs/PLAN.md](docs/PLAN.md) for the plan and the status of each phase.
 
-**Status:** all phases are built and tested against fake partners. The two real games have been tested together only up to player movement (Phase 2).
+**Status:** all phases are built. Played in the real games: movement, terrain collision, the overlay with frame sync, shooting creatures, tool mode. Newer features (Use key, damaging trees and rocks, menus, the held-item view) are built but not all confirmed in the real games yet. `docs/PLAN.md` is the full handoff document: how it fits together, repository map, debug switches, lessons learned, status and next steps.
 
 ## Layout
 
@@ -63,4 +63,4 @@ Settings are in `BepInEx/config/com.valoutcast.bridge.cfg` inside the Valheim fo
 
 ## Test
 
-`tools/test_all.sh` runs every test that needs no game running. `tools/fake_world.py` and `tools/fake_player.py` stand in for the games.
+`tools/test_all.sh` runs every test that needs no game running. `tools/fake_world.py` and `tools/fake_player.py` stand in for the games; `tools/start_test_session.sh` runs Outcast against the fake world (see `docs/PLAN.md`, "Build, run, test"). Close the real games first.

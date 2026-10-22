@@ -38,6 +38,14 @@ namespace ValOutcast
                 "How far the view turns per mouse movement. Higher is faster. Valheim's own mouse sensitivity setting applies on top.").Value;
             ToolMode.Configure(Config.Bind("Input", "ToolModeKey", "R",
                 "Key that switches between Outcast's weapons and Valheim's own items (sword, bow, hammer, hoe, torch). A Unity KeyCode name, for example R or V.").Value);
+            ToolMode.CameraOffset = new Vector3(
+                Config.Bind("ToolMode", "CameraRight", 0f, "In tool mode the camera can move this far to the right of the eyes (meters). 0 = at the eyes.").Value,
+                Config.Bind("ToolMode", "CameraUp", 0f, "In tool mode the camera can move this far up from the eyes (meters).").Value,
+                -Config.Bind("ToolMode", "CameraBack", 0f, "In tool mode the camera can move this far back from the eyes (meters).").Value);
+            HeldItemView.Shift = new Vector3(
+                Config.Bind("ToolMode", "ItemRight", 0f, "Where the held item is drawn: moved this far to the right of where the real item is (meters).").Value,
+                Config.Bind("ToolMode", "ItemUp", 0.4f, "Where the held item is drawn: moved this far up from where the real item is (meters). Raise it if the item is out of view, lower it if it is too high.").Value,
+                Config.Bind("ToolMode", "ItemForward", 0.55f, "Where the held item is drawn: moved this far forward from where the real item is (meters).").Value);
             OverlayBrightness = Config.Bind("Overlay", "Brightness", 0.85f,
                 "Brightness of Outcast's picture drawn over Valheim. 1 is as drawn, lower is dimmer.").Value;
             // Keep updating the link while the other game's window has focus.

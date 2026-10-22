@@ -57,6 +57,8 @@ class Program
         Method("Player", "GetHoverObject", 0);
         Method("Hud", "IsPieceSelectionVisible", 0);
         Method("Player", "SetControls", 12);
+        Field("VisEquipment", "m_rightItemInstance", "GameObject");
+        Field("VisEquipment", "m_leftItemInstance", "GameObject");
         Method("Humanoid", "HideHandItems", 2);
         Method("Humanoid", "ShowHandItems", 2);
         Type("IDestructible");

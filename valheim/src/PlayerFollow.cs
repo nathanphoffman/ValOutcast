@@ -251,12 +251,23 @@ namespace ValOutcast
         private static void Postfix(GameCamera __instance)
         {
             Player player = Player.m_localPlayer;
-            if (player == null || !PlayerFollow.Active || !PlayerFollow.HasCurrent) return;
+            if (player == null || !PlayerFollow.Active || !PlayerFollow.HasCurrent)
+            {
+                HeldItemView.Clear();
+                return;
+            }
             if (player.m_eye == null || PlayerFollow.CurrentLook.sqrMagnitude < 0.0001f) return;
 
             Vector3 eyeHeight = player.m_eye.position - player.transform.position;
-            __instance.transform.position = PlayerFollow.CurrentPosition + eyeHeight;
-            __instance.transform.rotation = Quaternion.LookRotation(PlayerFollow.CurrentLook, Vector3.up);
+            Quaternion rotation = Quaternion.LookRotation(PlayerFollow.CurrentLook, Vector3.up);
+            Vector3 position = PlayerFollow.CurrentPosition + eyeHeight;
+            // Optional: in tool mode the camera can sit a little away from the eyes (see ToolMode.CameraOffset). The held item itself is
+            // shown by HeldItemView.
+            if (ToolMode.Active) position += rotation * ToolMode.CameraOffset;
+            __instance.transform.position = position;
+            __instance.transform.rotation = rotation;
+            if (ToolMode.Active) HeldItemView.Update(player, __instance.transform);
+            else HeldItemView.Clear();
         }
     }
 }

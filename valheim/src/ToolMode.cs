@@ -14,6 +14,9 @@ namespace ValOutcast
         /// <summary>The key that switches between Outcast weapons and Valheim items (a Unity KeyCode name, set in the config file).</summary>
         public static KeyCode Key = KeyCode.R;
 
+        /// <summary>Where the camera sits in tool mode, from the eyes: right, up and forward in meters (negative forward is back).</summary>
+        public static Vector3 CameraOffset = Vector3.zero;
+
         private static bool _on;
 
         /// <summary>The frame the key was last pressed in. Valheim itself uses R to sheathe and draw weapons: that press must not also do that.</summary>
@@ -41,7 +44,8 @@ namespace ValOutcast
             _on = !_on;
             ToggledFrame = Time.frameCount;
             input.RequestWeapon(_on ? 12 : 13);   // tells Outcast to put its weapon away, or bring it back
-            Plugin.LogMessage("tool mode " + (_on ? "on: Valheim items" : "off: Outcast weapons"));
+            ItemDrop.ItemData held = Player.m_localPlayer.GetCurrentWeapon();
+            Plugin.LogMessage("tool mode " + (_on ? "on: Valheim items (holding " + (held != null ? held.m_shared.m_name : "nothing") + ")" : "off: Outcast weapons"));
         }
     }
 

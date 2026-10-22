@@ -1,144 +1,228 @@
-# ValOutcast Plan
+# ValOutcast: plan and handoff notes
 
-## Idea
+Last updated 2026-10-21. If you are picking this project up cold, read "Read this first" and "How it fits together", then skim "Status" and "Next steps". The rest is reference.
 
-Run both games at once. Outcast controls the player. Valheim supplies the world.
-A plugin in each game talks to the other over a local connection.
+## Read this first
 
-## Pieces
+**What it is.** A bridge between *Star Wars Jedi Knight: Jedi Outcast* (run through the open-source OpenJK engine) and *Valheim* (native Linux, BepInEx mod). Both games run at the same time on one PC. You look at and play in the **Valheim window**. Outcast runs the player (movement, mouse look, guns, lightsaber, health) with its window hidden, and draws only its own things (gun, saber, effects, HUD) onto a transparent picture that Valheim shows on top of its own. Valheim supplies the world: terrain, trees, creatures, sun. Idea inspired by SkyCraft (Skyrim + Minecraft).
 
-1. **Valheim plugin (C#)** in `valheim/`: BepInEx + Harmony. Reads terrain, creatures, time and weather. Applies damage and position from Outcast.
-2. **Outcast plugin (C)** in `outcast/`: changes to OpenJK's game code. Runs player movement, saber and Force. Uses Valheim's collision data.
-3. **Protocol** in `protocol/`: one list of message types, used by both sides.
-4. **Connection:** local UDP sockets first. Shared memory later if too slow.
+**Where things stand.** Everything is built. The user plays it in the real games. Confirmed working in the real games: connection, player movement, terrain collision, the overlay with frame sync and correct camera/field of view, shots that you can see, shooting creatures (a boar dies; the F8 test key spawns one), switching to Valheim's items with R (the hammer works). Built and compiling but **not yet confirmed in the real games**: the Use key (E), shots and the saber damaging trees and rocks, the lighter terrain collision, menu mode (inventory, chests, crafting), the hotbar coming back in tool mode, and the on-screen copy of the held item (`HeldItemView`, just written). See "Status" for the full list and "Next steps".
+
+**Working with this user.** Keep replies short and in plain English (a mid-level developer, not an expert). Never ask multiple-choice questions; ask plain questions. Answer what was asked, then stop; give a short summary of what changed after finishing work. The user runs and plays the real games and reports what they see, so ask them to restart a game after you change it and tell them what to look for. The user makes the git commits; do not commit unless asked. Never kill processes you did not start (the user's real Outcast and Valheim may be running). Update this file and the README whenever behavior changes.
+
+## How it fits together
+
+```
+        Valheim window (you play here)                              Outcast (hidden window, OpenJK + our changes)
+ +--------------------------------------------+   UDP localhost   +-----------------------------------------------+
+ | BepInEx plugin  (valheim/src, C#)          |  47100 <-> 47101  | outcast/src/vo_bridge.cpp  (game module)      |
+ |  - InputForwarder: keys, mouse -> Input -----------------------> |  - applies Input: moves/turns/fires the player|
+ |  - PlayerFollow: moves the Valheim player  | <---- PlayerState -- |  - sends PlayerState every game frame         |
+ |    and camera to match Outcast's player    |                   |                                               |
+ |  - TerrainStreamer: ground + objects ------------ CollisionSection ->  vo_field.cpp: wraps the movement trace  |
+ |  - CreatureStreamer: creatures as boxes ---------- ActorUpsert ----->  invisible "vo_actor" boxes to hit       |
+ |    applies hits   <-------------------------------- HitActor -------|                                          |
+ |  - WorldHits: damages trees/rocks  <-------------- HitWorld --------|  shots / saber that hit the ground columns |
+ |  - PlayerDamagePatch: creature hits ---------------- PlayerHurt ---->  Outcast health is the real health       |
+ |  - WorldLight: sun/ambient ------------------------- WorldContext -->  lights Outcast's models like Valheim's   |
+ |                                                                                                               |
+ |  Overlay.cs  <======= /dev/shm/valoutcast_frame (shared memory, RGBA picture) ======= vo_overlay.cpp (renderer)|
+ |  draws the picture over Valheim (OnGUI)    request counter + FOV written by Valheim, picture by Outcast       |
+ +--------------------------------------------+                   +-----------------------------------------------+
+```
+
+**Two kinds of traffic.** (1) Small UDP messages (`protocol/PROTOCOL.md`), both directions. (2) The finished Outcast picture goes through a shared-memory file (`protocol/FRAME.md`), because it is big (3.7 MB at 1280x720) and only the newest one matters.
+
+**Roles.** The code is written in terms of a *player side* (Outcast today) and a *world side* (Valheim today), so another game could take either role later. See "Game-neutral rule".
+
+**One frame, step by step (frame sync, "lockstep").** Valheim's `Plugin.Update` runs, in this order: (1) `Link.Tick` reads messages; (2) `ToolMode.Update`; (3) `InputForwarder.Update` sends this frame's keys and mouse; (4) `Overlay.Update` bumps the *request counter* in the frame file (and writes Valheim's horizontal field of view next to it) and waits up to 25 ms for the new picture; (5) `Link.Tick` again, which picks up the PlayerState Outcast sent while making that picture; (6) `PlayerFollow.Tick` moves the Valheim player (no smoothing when the picture arrived in time); then terrain, creatures, hits, Use key, light, hotbar. In `LateUpdate` the patched `GameCamera.UpdateCamera` puts the camera at the player's eyes. In `OnGUI` the picture is drawn. On the Outcast side the main loop (`Com_Frame`, patched in `common.cpp`) wakes as soon as the request counter changes, runs one game frame (reads Input, moves the player, sends PlayerState), draws exactly one picture (`SCR_UpdateScreen`, patched in `cl_scrn.cpp`, skips drawing when there is no new request), reads it back from the GPU and publishes it. So the picture and the camera pose come from the same Outcast frame and appear in the same Valheim frame. If Outcast is slower than 25 ms the wait times out and that frame shows the previous picture (a late picture is discarded so the two do not drift apart). If Valheim stops asking (menu, loading, quit), requests stop changing; after 250 ms Outcast treats that as "nobody is asking" and draws on its own again.
+
+**Coordinates and units.** On the wire: meters, Y up, right-handed, forward is -Z. Outcast uses 32 units per meter, X forward, Y left, Z up; `VO_ToWire`/`VO_FromWire` in `vo_bridge.cpp` convert. Valheim is meters, Y up, left-handed; the plugin flips Z (`PlayerFollow.WireToUnity`, `WorldToWire`, `WireToWorld`). The two worlds are unrelated maps, so the plugin *anchors* them: the first position Outcast reports is matched to where the Valheim player stands (feet on the real ground under them); after that only movement matters. A jump of more than 10 m in PlayerState counts as a teleport and re-anchors.
+
+## Repository map
+
+| Path | What it is |
+|---|---|
+| `valheim/` | The Valheim plugin (C#, BepInEx 5 + Harmony). `dotnet build` also copies it into Valheim's `BepInEx/plugins/ValOutcast`. |
+| `valheim/src/Plugin.cs` | Entry point. Config entries. Calls every part each frame, in order; a part that throws is switched off after logging once. |
+| `valheim/src/VoLink.cs` | The UDP connection and message encode/decode. No Unity types, so it is testable alone. |
+| `valheim/src/FrameReader.cs`, `Overlay.cs` | Read the shared-memory picture (seqlock-style, see `protocol/FRAME.md`); request pictures, wait for them, draw them. |
+| `valheim/src/PlayerFollow.cs` | Moves the Valheim player/camera to match Outcast's; hides Valheim's body; Harmony patches that stop Valheim's own input, set the camera at the eyes. |
+| `valheim/src/InputForwarder.cs` | Sends keys/mouse/weapon requests to Outcast; defines "a menu is open" (`MenuOpen`). |
+| `valheim/src/TerrainStreamer.cs` | Samples ground height and solid objects on a 0.5 m grid and streams 8 m chunks. |
+| `valheim/src/Combat.cs` | `CreatureStreamer` (creatures out, hits in) and `PlayerDamagePatch` (damage to the Valheim player goes to Outcast). |
+| `valheim/src/WorldHits.cs` | Applies HitWorld: damages trees/rocks/ore. |
+| `valheim/src/Interactor.cs` | The Use key (E) on what the crosshair is over. |
+| `valheim/src/ToolMode.cs`, `HeldItemView.cs` | Tool mode (R) and the on-screen copy of the held Valheim item. |
+| `valheim/src/HudHider.cs`, `WorldLight.cs`, `PerfStats.cs`, `TestSpawner.cs` | Hides the hotbar; sends sun/ambient light; timing log every 10 s; F8 spawns a boar. |
+| `outcast/src/vo_bridge.cpp/h` | The game-module side of the bridge (copied into OpenJK's `codeJK2/game/valoutcast/`). |
+| `outcast/src/vo_field.cpp/h` | The collision field (grid of columns) and its sweep test. Pure math; unit tested. |
+| `outcast/renderer/vo_overlay.cpp/h` | Renderer side: off-screen buffer, alpha handling, GPU read-back, shared-memory publish (copied into `code/rd-vanilla/`). |
+| `outcast/patches/0001-bridge-hooks.patch` | Our edits to OpenJK's own files (see below). |
+| `protocol/` | `PROTOCOL.md` (messages), `FRAME.md` (picture file), `vo_link.c/h` (C connection), `vo_protocol.py` (Python), `golden.txt` (exact bytes every implementation must produce). |
+| `tools/` | Tests, fake games, helper scripts (see "Build, run, test"). |
+| `third_party/` | **Not in git** (see `.gitignore`): `OpenJK/` (a git checkout we modify), `jk2run/` (symlinks to the built game and to the user's Steam copy of Jedi Outcast's `base/*.pk3`). |
+
+**The OpenJK patch.** `third_party/OpenJK` is a git checkout with our edits. The files we change: `code/client/cl_scrn.cpp` (skip drawing without a request), `code/qcommon/common.cpp` (wake on request), `code/rd-vanilla/` (`tr_backend.cpp` off-screen buffer and publish, `tr_light.cpp` lighting, `tr_world.cpp` no world drawing, `CMakeLists.txt`), `code/server/sv_snapshot.cpp` (always send missiles/beams/effects), `codeJK2/cgame/` (`cg_ents.cpp` hide the level's entities, `cg_predict.cpp` no level collision + draw from the game's player state, `cg_view.cpp` use Valheim's field of view, `cg_weapons.cpp` remember where the gun barrel is), `codeJK2/game/` (`g_weapon.cpp` shot start point and speed, `g_missile.cpp` and `wp_saber.cpp` report world hits, `g_active.cpp`/`g_main.cpp` call the bridge, `CMakeLists.txt`), `shared/sdl/` (hidden window with alpha, sound while unfocused). **Workflow:** edit files in `third_party/OpenJK`, then regenerate the patch with `cd third_party/OpenJK && git diff > ../../outcast/patches/0001-bridge-hooks.patch`. Files we *add* (`vo_bridge.*`, `vo_field.*`, `vo_link.*`, `vo_overlay.*`) are edited in `outcast/` and `protocol/` and copied in by `tools/apply_outcast.sh`, which also applies the patch to a fresh checkout. Always run `tools/apply_outcast.sh` before building so the copies are current. Do not edit the copies under `third_party/` for those files.
+
+## Build, run, test
+
+**Requirements:** Linux. Valheim (native) with BepInEx 5.4.23.5, started with the Steam launch option `./start_game_bepinex.sh %command%` (without it BepInEx does not load). Valheim version tested: 1.0.20 (Valheim updates often break mods; `tools/check_valheim_api.sh` reports what disappeared). A Steam copy of Jedi Outcast. .NET SDK (10), CMake, gcc/g++, `libjpeg-dev libpng-dev libsdl2-dev libopenal-dev`.
+
+**Build:** `cd valheim && dotnet build` (plugin, copied into Valheim). Outcast: `tools/apply_outcast.sh`, then `cd third_party/OpenJK/buildjo && make -j$(nproc)` (the cmake line is in `README.md`; only the JK2 single-player targets are on). The run folder `third_party/jk2run` holds links to the three built files and the game's `base/*.pk3`.
+
+**Run:** start Valheim, load a world, wait until standing on the ground, then `tools/run_outcast.sh [map] [width height]` (default `artus_mine 1280 720`; use the shape of the Valheim window). Play in the Valheim window.
+
+**Tests with no game:** `tools/test_all.sh` (protocol in Python, C and C#; collision field; Valheim API check). The protocol tests bind the real UDP ports, so close the real games first.
+
+**Test with a fake partner (Outcast for real, Valheim faked):** `tools/start_test_session.sh <options>` starts Outcast silently (SDL dummy audio) and `tools/fake_world.py`; `tools/stop_test_session.sh` stops only what it started. Logs are in `/tmp/valoutcast_test/`. Options of `fake_world.py`: `--walk` `--turn` `--turnrate D` `--fire` `--alt` `--weapon N` `--dark` `--nowall` `--ring M` (ring wall radius) `--noactors` `--near` `--hurt`. It streams a flat test terrain inside a 6 m ring wall, two wandering creatures, light, and prints every HitActor/HitWorld it receives. Typical: `tools/start_test_session.sh --fire --turn --nowall --noactors --weapon 3` (blaster, turning in place). Wait 15-20 s for the level to load. **Close the real games first** (shared ports and `/dev/shm/valoutcast_frame`).
+
+**Looking at what Outcast draws:** `tools/dump_frame.py out.png` (newest picture), `tools/frame_series.py out.png` (the frames right after a shot), `tools/fake_overlay_client.py SECONDS [FRAME_MS]` (acts like Valheim's overlay: requests pictures and prints Outcast's answer time). These three read the shared file; the last two request pictures themselves, so they only work while the real Valheim is not running. To look at pictures use the image-reading ability of the tool you have; transparent areas show as a checkerboard.
+
+**Looking inside Valheim's code:** there is no decompiler. `dotnet run --project tools/valheim_il -- members <Type> <text>` / `calls <Type> <Method>` / `il <Type> <Method>` / `callers <text>` (uses the Mono.Cecil that ships with BepInEx). This is how Valheim's input, hover, spawn and camera code was checked before hooking into it. `tools/check_valheim_api.sh` lists every Valheim function/field/type the plugin depends on.
+
+## Controls and settings (what the player sees)
+
+- WASD, mouse, jump, crouch, left/right click work as in Valheim but drive Outcast. Hotbar keys 1-8 pick an Outcast weapon, mouse wheel = next/previous. Right click (Valheim "Block") and middle click ("SecondaryAttack") are Outcast's alternate fire. Esc opens Valheim's menu.
+- **R**: tool mode on/off (Valheim's own items; see below). **E**: Use. **Tab**: Valheim inventory. **F8**: spawn a boar 6 m ahead (testing aid).
+- `BepInEx/config/com.valoutcast.bridge.cfg` (created on first run): `Input.MouseDegreesPerCount` (mouse speed, default 1), `Input.ToolModeKey` (default R), `Overlay.Brightness` (0.85), `ToolMode.CameraRight/CameraUp/CameraBack` (move the camera in tool mode, default 0), `ToolMode.ItemRight/ItemUp/ItemForward` (where the held-item copy is drawn, defaults 0 / 0.4 / 0.55).
+
+## Debug switches
+
+| Switch | Where | Effect |
+|---|---|---|
+| `VO_OVERLAY=1` | env, set by `run_outcast.sh` | Overlay mode: hidden window, off-screen drawing, publish pictures. |
+| `VO_OVERLAY_VISIBLE=1` | env | Show Outcast's window (debugging). |
+| `VO_OVERLAY_FPS` | env, default 45 | Publish rate when Valheim is not requesting pictures. |
+| `VO_SV_FPS` | env, default 60 | Outcast game-logic rate (Outcast itself uses 20; low feels laggy). |
+| `VO_GIVE_ALL=1` | env, on in `run_outcast.sh` | Every weapon (saber included) and 999 of every ammo at each level start, topped up every 0.5 s. Set `VO_GIVE_ALL=` (empty) for off. |
+| `VO_BOLT_SPEED` | env, default 0.3 | Speed of the player's shots (1 = Outcast's normal 72 m/s, too fast to see). Thrown weapons unaffected. |
+| `VO_FIELD_BOX` | env, default 0.7 | Width of the player's box against Valheim ground (1 = full). Lower = lighter collision. |
+| `VO_DEBUG_BOLTS=1` | env | Logs what each of the player's shots hits, creature hits sent, and world hits sent. |
+| `VO_DEBUG=1`, `VO_DEBUG_HIT=1`, `VO_DEBUG_SKIP` | env | Position log; player "hits" the first creature every few seconds; skip cutscenes. |
+| `cg_drawCrosshair 0`, `cg_drawGun 1` | set in `run_outcast.sh` | Crosshair off (Valheim's is used). `cg_drawGun` is set to 0/1 at run time by tool mode, and is saved in Outcast's config on exit, so `run_outcast.sh` resets it to 1 every start. |
+| `vo_light`, `vo_mute` | Outcast cvar / console command | Set by the bridge: lighting values; mute/unmute sound. |
+| Valheim log | `BepInEx/LogOutput.log` | `link:`, `overlay:`, `perf:` (every 10 s: frames/s and ms per plugin part), `creatures:`, `hit applied`, `world hit`, `world hits from Outcast`, `use:`, `tool mode on/off`, `terrain: objects that block the player are on layers ...`. |
+
+## Message list (summary; the spec is `protocol/PROTOCOL.md`)
+
+Header 8 bytes (magic, version, type, sequence). Types: 1 Hello, 2 Heartbeat, 3 PlayerState (player to world), 4 CollisionSection, 5 CollisionReset, 6 ActorUpsert, 7 ActorRemove, 8 HitActor (player to world), 9 PlayerHurt (world to player), 10 Input (buttons, move axes, look deltas, weapon request), 11 WorldContext (sun, ambient), 12 HitWorld (player to world). Weapon request values: 0 none, 1-9 slot, 10 next, 11 previous, 12 tool mode on (put weapon away), 13 tool mode off. The picture file header carries the request counter (byte 20) and the wanted horizontal FOV (byte 24). Adding a message means touching: `vo_link.h/c`, `vo_protocol.py`, `VoLink.cs`, `tools/make_golden.py` (then run it to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
 
 ## Game-neutral rule
 
 We may swap in other games later (for example Skyrim or Doom 2016). So:
 
 - **Two roles, not two games.** A *player side* runs the player (movement, combat). A *world side* supplies the world (terrain, creatures, time). Today Outcast is the player side and Valheim is the world side.
-- **Protocol never names a game.** Messages use neutral names: `WorldContext`, `ActorUpsert`, `CollisionSection`, `PlayerState`, `HitActor`, `PlayerHurt`. No "Greydwarf", "saber" or game-specific IDs. Anything game-specific goes in an opaque `kind` string or a generic extras field.
-- **Neutral units on the wire:** meters, Y-up, right-handed. Each game's plugin (its *adapter*) converts to and from its own units and axes. Nothing outside an adapter knows about 32 units per meter.
-- **Adapters are thin.** An adapter only translates and hooks into its game. Shared logic (connection, heartbeats, message encoding, chunking) lives in `protocol/`, not in the game folders.
-- **Don't build a framework yet.** Finish Valheim + Outcast, then pull out what is truly shared before adding a third game.
-- **Test without games.** The fake-game scripts in `tools/` speak the neutral protocol, so any new adapter can be tested against them.
+- **Protocol never names a game.** Messages use neutral names: `WorldContext`, `ActorUpsert`, `CollisionSection`, `PlayerState`, `HitActor`, `HitWorld`, `PlayerHurt`. No "Greydwarf", "saber" or game-specific IDs. Game-specific things go in an opaque `kind` string or a generic extras field. (HitWorld's `kind` is 0 shot / 1 lightsaber today; that is a small leak to keep an eye on.)
+- **Neutral units on the wire:** meters, Y-up, right-handed. Each game's plugin (its *adapter*) converts. Nothing outside an adapter knows about 32 units per meter.
+- **Adapters are thin.** Shared logic (connection, heartbeats, encoding, chunking) lives in `protocol/`.
+- **Don't build a framework yet.** Finish Valheim + Outcast first.
+- **Test without games.** The fake-game scripts in `tools/` speak the neutral protocol.
 
-## Unit conversion
+## Hard-won lessons (read before debugging)
 
-**Decided:** on the wire it's meters, Y-up. The Outcast adapter converts to 32 Outcast units per meter (Outcast's player is ~56 units tall, close to a 1.8 m person) and to Z-up. The Valheim adapter needs no conversion (meters, Y-up). The conversion code lives only in the adapter.
+1. **Outcast's renderer never knew the player turned.** Valheim's mouse turns the player inside Outcast's *game* logic, but the *client/render* side only knows its own (empty) input, so its camera stayed put. Gun and crosshair are screen-fixed so they looked fine; world things (shots) were drawn from the wrong angle, worse the more you turned. Fixed in `CG_PredictPlayerState` (`cg_predict.cpp`): the predicted state's view angles and origin are copied from the game's player state. If anything in the overlay looks wrong relative to Valheim's world, check the drawn angle against the game's first (debug print of `cg.refdef` vs `g_entities[0].client->ps`).
+2. **The player model never turns with the view** (only `currentAngles` follows; `legsYaw` stays). Anything taken from the model (muzzle point, saber base) is wrong. Shots now start at the drawn gun barrel (`vo_muzzleRel` measured in `cg_weapons.cpp`, applied in `CalcMuzzlePoint`); an eye-height start looked like a dot and was invisible.
+3. **Shots at normal speed are invisible** (72 m/s = over a meter per frame, a dot after two frames). Slowed to 30%.
+4. **Field of view must match** Valheim's (it is the player's setting; Outcast defaults to a fixed 80). Otherwise shots slide across the screen at the wrong speed when turning.
+5. **Valheim has no first-person view.** The camera is at the eyes; a held item hangs far below the view. `HeldItemView` draws a copy in front of the camera, following the real arm's animation (the real body is hidden by disabling renderers, not by `SetActive`, so the Animator keeps running).
+6. **Valheim's `FindObjectsOfType` skips inactive objects.** The hotbar hider lost its list this way and never brought the hotbar back. Keep your own list of anything you deactivate.
+7. **Valheim's input is gated by `Player.TakeInput` and `PlayerController.TakeInput`** (patched to false while Outcast drives and tool mode is off). `Player.UpdateHover` still runs, so `GetHoverObject()` works; `Player.Interact` is private (called by reflection in `Interactor`). Valheim's R key (sheathe) is suppressed in the frame the tool key is pressed.
+8. **Terrain collision is a grid of 0.5 m solid columns.** Square columns catch a full-width box, so the player box is narrowed to 70% against them; only layers the player really collides with (from Valheim's collision matrix) count; objects only block if solid at body height; things under 0.3 m are ground. Taller things above head height are walked under.
+9. **Two games, one GPU:** Outcast's picture read-back waits for the GPU. In the real session the overlay wait averaged 5-17 ms with occasional 25 ms timeouts (in tests against a fake partner it is about 6 ms). This costs Valheim frames (about 50 fps to 37-45 fps). See "Next steps".
+10. **Cutscenes and death:** the bridge only turns on when the player is free and on the level's floor (turning it on mid-air in an intro killed Kyle and left a cutscene waiting). Cutscenes are skipped automatically in overlay mode (`exitview`). Outcast stops ticking while a map loads, so a long load can show a brief "lost connection".
+11. **Leftover state on the machine:** `/dev/shm/valoutcast_frame` outlives the games (a stale request counter once froze a fresh Outcast; now handled by the 250 ms rule). UDP ports 47100/47101 are held by whichever games are running. Several Outcast copies at once fight over the shared file. `pkill -f <text>` kills your own shell if the shell's command line contains the text; use the start/stop scripts.
+12. **Outcast saves cvars (`CVAR_ARCHIVE`) on exit**, so anything set at run time (like `cg_drawGun`) must be reset on start.
+13. **Creatures are sparse in Valheim** (0-2 within 40 m in the Meadows; spawning is timer-based per zone and does not depend on the player walking; checked in Valheim's `SpawnSystem`). Use F8 to test.
+14. **Windows:** the code uses Linux-only calls (mmap, /dev/shm). Windows would need shared-memory replacements.
 
-## Phase 0 status
+## Status
 
-- Valheim (native Linux) + BepInEx: already installed.
-- OpenJK: built from `third_party/OpenJK`. Run folder is `third_party/jk2run` (symlinks to the build and your Steam game files). Built with the Outcast targets (`buildjo/`, not the Jedi Academy ones). Start with `cd third_party/jk2run && ./openjo_sp.x86_64 +set fs_basepath "$PWD"`.
-- Hello plugin: `valheim/` builds and copies itself into Valheim's `BepInEx/plugins/ValOutcast`.
-- **Confirmed:** the hello plugin loads in Valheim (log line `ValOutcast hello: plugin loaded`). Valheim version l-1.0.20, BepInEx 5.4.23.5. Steam launch option must be `./start_game_bepinex.sh %command%`, otherwise BepInEx doesn't load.
-- **Confirmed:** Outcast runs under OpenJK and `map kejim_post` loads (the level intro plays). **Phase 0 is done.**
+**Phases (original plan):** 0 setup done, 1 connection done, 2 player sync done, 3 terrain collision done, 4 creatures and combat done, 5 rendering done, 6 world sync and polish (below), 7 release basic (everything builds from the repo).
 
-## Phases
+**Confirmed in the real games by the user:** connection; moving and turning the Valheim character from Outcast; terrain collision (feel improved after the "less brutal" change; the newest lighter version not yet re-checked); the overlay, frame sync, field of view and the camera fix ("that finally did it"); shots visible and aligned; creature hits ("boar hits work great"); tool mode toggling and the hammer working.
 
-Each phase ends with something you can run and check. Don't start the next one until "Done when" is true.
+**Built, compiled, tested only with the fake partner or not at all in real games:** Use key (E); HitWorld (shots/saber damaging trees and rocks; tested that Outcast sends the messages, not that a real tree takes damage); lighter terrain collision; menu mode; hotbar returning in tool mode (fixed after the user reported it missing); `HeldItemView` (just written; the user reported seeing no held item before it); config entries for item/camera offsets.
 
-### Phase 0: Setup
-- Install Valheim + BepInEx, build OpenJK, confirm Jedi Outcast runs under OpenJK.
-- Pick the unit scale and the Valheim version to target.
-- **Done when:** a "hello" BepInEx plugin loads in Valheim, and your OpenJK build starts a map.
+### Feature notes by area
 
-### Phase 1: Connection
-- Define Hello/Heartbeat in `protocol/`. Add UDP send/receive on both sides.
-- Write `tools/fake_world.py` and `tools/fake_player.py` so each side can be tested alone (neutral names, not game names).
-- If one side dies, the other detects it (heartbeat timeout) and carries on.
-- **Done when:** both games show "connected" in their logs, and killing one is noticed by the other.
+**Connection and sync.** UDP localhost, ports 47100 (world) / 47101 (player), golden-packet tests in Python, C, C#. Heartbeat timeout detection on both sides. Frame sync as described in "How it fits together". Outcast only switches on once Valheim is in a world (Valheim sends input only then); it idles at Valheim's title screen. Plugin parts switch themselves off after one error. The `PerfStats` log shows per-part cost.
 
-**Phase 1 status:** built and tested headless; only the real Valheim-to-Outcast run is left.
-- Spec: `protocol/PROTOCOL.md` (ports 47100 world / 47101 player, golden packets).
-- Python, C and C# links all pass the golden packets and the connect/lose tests: `tools/test_protocol.py`, `tools/test_c.sh`, `tools/test_csharp.sh`.
-- Outcast side confirmed against `tools/fake_world.py`: logs "connected", and "lost connection" when the fake quits.
-- Note: Outcast stops ticking while a map loads, so a long load can show a brief "lost connection" then "connected" again. Expected.
-- **Confirmed with the real games:** Valheim logged `link: connected` while Outcast was running. The real-game "lost connection" check was not isolated (both games were closed together); the fake-partner tests cover it. **Phase 1 is done.**
+**Player sync.** Outcast sends PlayerState every game frame (game logic runs at 60 Hz, `VO_SV_FPS`); Valheim moves its player to match, anchored as described. With a fresh picture each frame the position is used as is (no smoothing); without one it blends between the two newest samples. Valheim's keyboard/mouse are ignored for its own character while Outcast drives; they are forwarded as `Input`. Sound: silent until Valheim is in a world and Outcast has taken over; muted in cutscenes, loading and after death; music off; keeps playing when Outcast's window is unfocused.
 
-### Phase 2: Player sync
-**Status: done.** Confirmed with the real games: walking and turning in Outcast moves and turns the Valheim character. Outcast sends PlayerState (position + look direction) every frame; the Valheim plugin moves the player to match, anchored to where the player stands, and ignores keyboard and mouse while data is arriving. Terrain is ignored for now, so the Valheim character can float or clip (fixed in Phase 3). Test without Outcast: run `tools/fake_player.py`, it walks the Valheim player in a circle.
-- Outcast sends PlayerState (position, look direction) every frame.
-- Valheim moves its player to match and hides its own input.
-- **Done when:** walking in Outcast moves the Valheim character the same way.
+**Terrain.** `TerrainStreamer` measures cells within 4 chunks (8 m each) of the player with a 1 ms per-frame budget, re-measures chunks every 0.5 s, resends unchanged ones every 5 s. Each cell: `ZoneSystem.GetGroundHeight`, then a raycast from 30 m up for solid objects (layers from the collision matrix), with the body-height check for tall things. `vo_field.cpp` sweeps the player's box against the columns; `VO_PlayerTrace` wraps `gi.trace`: over Valheim ground the level's own solids are ignored for every trace (movement, shots, AI). Limits: heightfield only (no caves, overhangs, walking under roofs, climbing), 0.5 m steps, low things (< ~0.5 m) can be stepped onto. The Outcast level's water/lava/fog volumes are ignored too.
 
-### Phase 3: Terrain collision (hardest)
-**Status:** built and tested against a fake world (walls block, ground holds). Not yet seen with real Valheim terrain.
-- Valheim samples ground height (and "something is in the way" for trees, rocks, buildings) on a 0.5 m grid around the player and streams it as 8 m chunks (`CollisionSection`). See `protocol/PROTOCOL.md`.
-- Outcast keeps the chunks (`outcast/src/vo_field.cpp`, unit tested with `tools/test_field.sh`) and wraps the player's movement trace (`VO_PlayerTrace`). Over Valheim ground, the level's own walls and floors are ignored.
-- The bridge only switches on when the player is free and standing on the level's floor, and switches off for cutscenes and death. (Turning it on mid-air in an intro made Kyle fall and die, and left a cutscene waiting.)
-- Limits for now: terrain is a heightfield (no caves, overhangs, or walking under roofs), things standing on the ground (trees, rocks, walls) become columns as tall as they really are (low ones, under about half a meter, can be stepped onto; no climbing on anything else), ground is cut into 0.5 m steps.
-- Test without Valheim: `tools/fake_world.py` makes flat ground inside a 6 m ring wall, and Outcast could not walk out of it.
+**Creatures and combat.** Valheim sends creatures within 40 m 10 times a second; Outcast makes invisible `vo_actor` boxes (contents BODY); guns and the saber hit them like any entity. Damage on a box is sent back as HitActor and the box is healed; Valheim applies it as a slash hit (Outcast damage x1). Damage to the Valheim player is intercepted (`PlayerDamagePatch`), sent as PlayerHurt, applied to Outcast's health (Valheim damage x4, capped at 50 per blow, ignored for 3 s after the games line up; falls/drowning ignored). Outcast's health is the real one. Numbers are guesses (`HURT_SCALE` in `vo_bridge.cpp`, `OutcastToValheim` in `Combat.cs`). Log lines: `creatures:` and `hit applied`.
 
-### Phase 4: Creatures and combat
-**Status:** built. Tested against a fake world: creatures appear as boxes, hits come back, damage kills the player. Not yet tried against real Valheim creatures.
-- Valheim sends creatures within 40 m (`ActorUpsert`, 10 times a second). Outcast makes an invisible box for each (`vo_actor`), so you can walk into it and hit it with anything that hurts entities.
-- Damage taken by a box is sent back (`HitActor`) and the box is healed, so Valheim decides who dies. Valheim turns it into a normal hit on the creature.
-- Hits on the Valheim player are caught, sent to Outcast (`PlayerHurt`) and applied there. Only attacks and harmful effects from creatures are passed on (falls, drowning and so on are ignored, because the other game moves the player and Valheim would count that as falling). Damage is also ignored for 3 seconds after the two games line up, and one blow can take at most 50 from Outcast's player. Outcast's health is the real one. Valheim damage x4 = Outcast damage. These numbers are guesses and live in `outcast/src/vo_bridge.cpp` (`HURT_SCALE`) and `valheim/src/Combat.cs` (`OutcastToValheim`).
-- Test helpers: `VO_DEBUG_HIT=1` makes the player "hit" the first creature every few seconds.
+**Hitting the world (trees, rocks, ore).** A shot or saber swing that hits the world over Valheim ground sends HitWorld (position, direction, damage, kind). `WorldHits` damages the closest destructible object within 0.9 m of that point (creatures and your own buildings are skipped) as both an axe and a pickaxe blow at tool tier 4. Shot = its Outcast damage (14 for the blaster); saber = 25, at most 4 per second. Hits on plain ground find nothing and are counted.
 
-### Phase 5: Rendering
-**Status:** built. Outcast's side confirmed by viewing real frames; Valheim's drawing code is written but not seen on screen yet.
-- Outcast draws only its own things (first-person weapon, saber, effects, HUD) on a transparent background and publishes each frame in shared memory (`/dev/shm/valoutcast_frame`, see `protocol/FRAME.md`). Turned on by `VO_OVERLAY=1` (`tools/run_outcast.sh` does it). The level, its people, rain and props are not drawn.
-- Valheim reads the frame (`FrameReader.cs`, tested against a real frame) and draws it over its own picture (`Overlay.cs`). Its camera is forced into first person while Outcast drives.
-- Inspect a frame without Valheim: `tools/dump_frame.py out.png`.
-- Limits: the overlay has no depth, so Outcast's things always draw on top of Valheim's world (nothing hides behind a Valheim wall). Frames go through the CPU (about 3.7 MB each at 1280x720), which should be fine for now. The Outcast window is hidden and it draws into an off-screen buffer (`VO_OVERLAY_VISIBLE=1` shows it for debugging), so it never takes focus or the mouse. Cutscenes are skipped automatically in this mode.
+**Overlay picture.** Outcast draws into an off-screen buffer (RGBA, transparent background; the level, its people, rain and props are not drawn), converts to straight alpha with edge-color fix (no dark outlines), publishes it. Valheim draws it stretched over the whole screen with brightness 0.85; start Outcast with the same window shape as Valheim's. No depth sharing: Outcast's things always draw on top of Valheim's world. Hidden while any Valheim menu is open. Lighting: Valheim sends sun direction and sun/ambient colors 4x a second; Outcast lights its models with them (bright by day, dark at night).
 
-### Phase 6: World sync and polish
-**Status:** partly done.
-- Done: Valheim keyboard and mouse drive Outcast (`Input` message, `InputForwarder.cs`). Input stops while any Valheim menu, chat or console is open. Bridge switches itself off in cutscenes and on death.
-- Done: weapon switching (Valheim hotbar keys 1-8 pick a weapon slot, mouse wheel = next/previous weapon), and short clicks are not lost. While Outcast drives, Valheim's own hotbar, build and inventory screens are off (Esc still opens Valheim's menu).
-- Done: Outcast's sound keeps playing when its window is not focused, and the game logic runs at 60 updates a second (`VO_SV_FPS`, default 60) instead of 20, so movement is smooth and responds quicker. Walking speed was checked to be the same at 60.
-- Done: tuning in `BepInEx/config/com.valoutcast.bridge.cfg` (created the first time Valheim runs with the plugin): `MouseDegreesPerCount` (mouse speed, default 1) and `Brightness` (overlay brightness, default 0.85).
-- Done: sound is silent until Valheim is in a world and Outcast has taken over. It is muted again in cutscenes, while loading and after death, and music is off. (`vo_mute` console command, sent by the game code.)
-- Done: Outcast only switches on once Valheim is in a world (Valheim sends input only then), so it idles at Valheim's title screen.
-- Done: while Outcast drives, Valheim's hotbar (the numbered tool slots) is hidden.
-- Done: shots, aiming and the crosshair now use Valheim's ground and creatures, not the hidden Outcast level (before, shots hit the level and the crosshair drifted toward the gun). The level's water, lava and fog are ignored too.
-- Done: `VO_GIVE_ALL` (on in `tools/run_outcast.sh`) gives every weapon, the lightsaber included, and 999 of every ammo type at the start of each level, topped up every half second, for testing.
-- Done: right click (Valheim's "Block") and middle click ("SecondaryAttack") are both Outcast's alternate fire.
-- Done: the lightsaber blade now shows in levels where Kyle starts without his saber (`give all` skipped the saber's setup; the bridge now does it). Models in the picture are lit evenly instead of by the invisible level's lighting (Kyle was a black silhouette in `artus_mine`). The picture is published 45 times a second (`VO_OVERLAY_FPS`), because fast things like bullets can be missed at lower rates.
-- Done: bullets, beams and effect events are always sent to Outcast's own view (they used to vanish once they left the hidden level's "visible from here" area). A bullet flying straight away from you is a small glowing dot near the crosshair, which is correct for a first-person view.
-- Done: lighting. Valheim sends the sun direction and sun and ambient colors (`WorldContext`, 4 times a second) and Outcast lights its models to match: bright by day, dark at night. (This replaces "time and weather sync" below for the part that matters for a picture of hands and a saber.)
-- Done: frame sync. Valheim asks for one picture per frame it draws (a counter in the shared frame file) and Outcast draws exactly one picture per request, instead of two free-running clocks. Tested: 298 requests gave 298 pictures, and no requests gave no drawing. Update: it is now a lockstep. Outcast's main loop wakes as soon as a request arrives (no 8 ms timer), and Valheim waits up to 25 ms for that picture, then reads the position Outcast sent while making it and uses it unsmoothed. So the hands/effects and the camera come from the same Outcast frame, shown in the same Valheim frame. If Outcast is slow the wait times out and the old behavior (one frame behind, smoothed) takes over for that frame. Not tested with the real games yet.
-- Done: the player's shots now start at the gun barrel as it is drawn on screen, turned along with the view. Before, they started at the player model's hand, and the model never turns (Valheim turns the view), so as you turned the shots started up to a meter behind or beside you and flew off screen. (An in-between fix started them exactly at the eyes, which made them almost invisible: a shot on the aim line is just a dot under the crosshair.) `VO_DEBUG_BOLTS=1` logs what each of the player's shots hits and how far away; use it if shots seem to vanish.
-- Done: field of view. Outcast drew with a fixed 80 degrees (horizontal) while Valheim's is its own (about 96 at 16:9 by default, and the player can change it), so Outcast's things (bullets especially) slid across the screen at a different speed than Valheim's world as you turned. Valheim now writes its horizontal FOV into the frame file (byte 24) and Outcast draws with it.
-- Done (not tested in the real games yet): tool mode (`valheim/src/ToolMode.cs`). `R` (setting `Input.ToolModeKey`) switches between Outcast weapons and Valheim's own items. In tool mode Outcast puts its weapon away (weapon request 12; `cg_drawGun 0`; a lit lightsaber is swapped for a gun first, because the saber puts Outcast's camera behind the player) and keeps walking and aiming. Valheim gets its input back (the `TakeInput` blocks are off), shows its body, arms and held item, shows the hotbar (number keys pick Valheim items, the mouse wheel is Valheim's), and runs its own attacks, blocking, building and tools. Moving, jumping and running are zeroed on the Valheim side (`SetControls` patch), because Outcast moves the player and running on the spot would drain the stamina a swing needs. Valheim's own use of R (sheathe/draw) is ignored in the frame R switches the mode. Not done: Valheim menus that need the mouse cursor (the inventory, chests, crafting), though the hammer's piece menu may work; the first-person view shows Valheim's whole body, head included.
-- Done (not tested in the real games yet): menu mode. Valheim's own screens now work while Outcast drives: the inventory (Tab), chests, crafting stations, cooking, traders, signs and the hammer's piece menu. They handle the mouse cursor themselves; the plugin's part is that Outcast stands still and does not turn while one is open (`InputForwarder.MenuOpen`, which now includes the hammer's menu), that Outcast's picture is hidden while one is open (`Overlay`), and that nothing blocks them any more (the old `InventoryGui.Show` block was removed). E opens chests and crafting stations by the same Use call as everything else.
-- Done: the Use key (E). Valheim ignores its own input while Outcast drives, so the plugin presses Use for you on whatever the crosshair is over (`valheim/src/Interactor.cs`): doors, pickables like berries, items on the ground, beds and so on. Chests, crafting stations, signs and traders open Valheim's own menus (see menu mode below).
-- Done: hitting trees, rocks and ore. When a shot or a lightsaber swing hits the world itself over Valheim ground, Outcast sends a HitWorld message (protocol message 12, `VO_ReportWorldHit`). The plugin (`valheim/src/WorldHits.cs`) damages the closest destructible thing within 0.9 m of that point, as both an axe and a pickaxe blow (tool tier 4, so everything can be cut or mined). Creatures are skipped (they have their own boxes) and so are your own buildings. A shot is worth its Outcast damage (14 for the blaster); a lightsaber blow is worth 25 and at most 4 a second. The Valheim log shows `world hit: ...` lines. Not tested against real trees yet.
-- Done: lighter terrain collision, because the player kept getting stuck on trees and rocks. (1) Which things block is taken from Valheim's own collision rules (the layers the player really collides with), so bushes and other walk-through things no longer become walls; the plugin logs the layers it chose (`terrain: objects that block the player are on layers ...`). (2) A tall object only blocks if it is solid at body height (0.6 to 1.8 m up), so branches, roofs and arches higher up are walked under. (3) Things lower than 0.3 m count as ground. (4) Against the Valheim ground the player's box is 0.7 of its normal width (`VO_FIELD_BOX`, 1 = full width), so it slides past the square corners of the columns.
-- Done: Outcast's own crosshair is switched off (`cg_drawCrosshair 0` in `tools/run_outcast.sh`); Valheim's crosshair is used instead, because the two overlapped the gun and Valheim's sits exactly on the aim line.
-- Done: Outcast's picture is now drawn from where the player really is. Valheim's mouse turns the player inside Outcast's game logic, but the part of Outcast that draws the picture only knew its own input (none), so its camera never turned: it kept looking the way it started. The gun and crosshair are fixed to the screen so they looked right, but anything in the world (shots, effects) was drawn from the wrong angle, more wrong the further you turned. The draw step now takes the player's view angles and position from the game state (`CG_PredictPlayerState` in `cg_predict.cpp`). Mouse sensitivity was not the cause.
-- Done: the player's shots are slowed to 30% speed (`VO_BOLT_SPEED`, 1 = Outcast's normal speed; grenades and mines are left alone). At normal speed (about 72 m/s) a shot moves over a meter per frame, crosses the screen in a frame or two and is a tiny dot after that, so nobody could see it. Checked by capturing pictures frame by frame: at 30% each shot streaks from the barrel to the crosshair over about a dozen frames.
-- Done: if Valheim quits, the leftover request counter in the frame file no longer freezes Outcast (requests that stop changing for 250 ms count as nobody asking).
-- Done: see-through pixels at the edges of Outcast's picture now carry the color of their neighbors, so smoothing no longer makes dark outlines (the "green screen" look).
-- Known: with the lightsaber out, Outcast's camera sits behind and above Kyle (that is how Jedi Outcast shows the saber), so the picture shows his back, while Valheim's camera is at his eyes.
-- Equipment is not linked: Valheim's items and inventory are not connected to Outcast's weapons. Outcast uses its own. Mapping (for example, an equipped Valheim sword to the lightsaber) would be a table that the Valheim plugin sends as a weapon request, but it is not built.
-- Done: plugin parts switch themselves off after one error instead of flooding the log.
-- Not done: weather (rain, fog) and time of day beyond the lighting above.
-- Not done: save syncing. Loading a Valheim save does not rewind Outcast (and the reverse).
-- Not done: death and respawn. When the Outcast player dies, Outcast's own death handling runs and Valheim carries on.
+**Shots.** Start at the drawn barrel, fly at 30% speed, always sent to Outcast's view (missiles, beams, effects bypass the "visible from here" rules of the hidden level). Valheim's crosshair is used; Outcast's is off.
 
-### Phase 7: Release
-**Status:** basic version. Everything builds from this folder (see the main README). `tools/test_all.sh` runs all tests that need no game.
+**Tool mode (R).** Switches between Outcast weapons and Valheim's own items (sword, bow, hammer, hoe, torch...). Outcast puts its weapon away (weapon request 12: `cg_drawGun 0`; a drawn saber is swapped for a gun first because the saber puts Outcast's camera behind the player) and keeps walking and aiming. Valheim gets its input back (the `TakeInput` blocks are off), shows the hotbar (number keys pick Valheim items, the wheel is Valheim's) and runs its own attacks, blocking, building and tools. Walking/jumping/running are zeroed on the Valheim side (`SetControls` patch) because Outcast moves the player and running on the spot would drain the stamina a swing needs. The Use key is handled by Valheim itself in this mode. `HeldItemView` draws the held items (right and left hand) in front of the camera.
+
+**Menu mode.** Valheim's screens (inventory with Tab, chests, crafting stations, cooking, traders, signs, the hammer's piece menu) work while Outcast drives: they handle the cursor themselves; Outcast stands still and does not turn while one is open (`InputForwarder.MenuOpen`), and the picture is hidden (`Overlay`). Nothing blocks them any more.
+
+**Use key.** `Interactor` calls Valheim's `Player.Interact` on `GetHoverObject()` when E is pressed (outside tool mode and menus): doors, pickables, items on the ground, beds, chests, crafting stations.
+
+## Known limits and rough edges
+
+- The lightsaber camera: with the saber out, Outcast's camera sits behind and above Kyle (that is how Jedi Outcast shows the saber), so the picture shows his back while Valheim's camera is at his eyes. Not fixed.
+- In tool mode, Valheim's whole body is hidden and only a copy of the held item is drawn. Bows (string animation), torch flames, shields and other special items may look wrong (only meshes are copied).
+- Equipment is not linked: Valheim's items and Outcast's weapons are separate. Outcast uses its own weapons; Valheim's items are used only in tool mode.
+- Outcast's health/ammo and Valheim's health/stamina are separate. Only creature damage to the player is mapped.
+- Overlay latency: see lesson 9. Frames per second drop when both games share one GPU.
+- No depth sharing between the pictures; Outcast's effects draw over walls.
+- Terrain is a heightfield; no caves, interiors or climbing.
+- Death and respawn: if the Outcast player dies, Outcast's own death handling runs and Valheim carries on.
+- Weather (rain, fog) and time of day reach Outcast only as lighting.
+- Save syncing: loading a Valheim save does not rewind Outcast (and the reverse).
+- Valheim updates can break the plugin; run `tools/check_valheim_api.sh` after an update.
+
+## Next steps (suggested order)
+
+1. **Death and respawn.** Outcast death should kill the Valheim player and the respawn should reset Outcast (or the reverse). Hooks: Outcast's death path in `g_active.cpp`/`g_main.cpp` (the bridge already switches off on death) and a Valheim-side `Player.OnDeath`/respawn patch; probably a new message or reuse of `PlayerHurt` plus a "reset" message.
+2. **Health and stamina link.** Food, potions and healing in Valheim should affect Outcast health (and the reverse); decide which side is the truth. Probably: Valheim's max health and healing events map to Outcast health through a new `PlayerVitals` message.
+3. **Performance.** Reduce the overlay wait: read the picture back asynchronously (pixel buffer objects, double buffering), do the alpha conversion on the GPU, and/or accept one frame of latency when the wait would exceed a budget. Measure with the `perf:` log line and `tools/fake_overlay_client.py`.
+4. **Verify the unconfirmed features in the real games** (see Status) and fix what the user reports: Use key, HitWorld on a real tree/rock (damage may be too low for large trees), lighter collision, menu mode, hotbar, `HeldItemView` offsets and special items.
+5. **Lightsaber camera and first-person body.** Either force Outcast's first-person view while the saber is out or accept the view; draw Valheim's own arms properly.
+6. **Equipment mapping.** Map an equipped Valheim item to an Outcast weapon (a table sent as a weapon request) so the Valheim inventory matters.
+7. **Weather and time of day** beyond lighting; **save syncing.**
+8. **Multiplayer (long term).** Each player runs both games; Valheim's networking carries positions and damage. Others would see a normal Valheim character unless Kyle's model and animations are converted for Unity and weapon effects are recreated from synced events. Discussed, not planned in detail.
+9. **Release polish:** one command to install everything, a Windows path (shared memory), documentation for other users.
 
 ## Risks
 
-- Rendering and terrain collision are the hardest parts.
+- Rendering and terrain collision were the hardest parts and remain the fragile ones.
 - Valheim updates often break mods.
-- OpenJK uses an old engine, so GPU texture sharing may take extra work.
-
-## Size estimate
-
-About 10-20k lines of code. Up to ~30k with GPU rendering and full save sync.
-
-## Out of scope (for now)
-
-Multiplayer, Discord, Windows-only GPU sharing, time and weather sync, save syncing, depth sharing between the two pictures.
+- OpenJK is an old engine; GPU texture sharing would take extra work.
+- Real-game verification depends on the user; many features are tested only against fakes.
 
 ## Open questions
 
-- Which Valheim version to target?
-- Where does the Outcast view get displayed (overlay, texture on a screen, full window)?
-- How are saves tied together?
+- Should Outcast's health or Valheim's be the truth for healing and food?
+- How should death, respawn and saves be tied together?
+- Is a lightsaber third-person view acceptable, or should the saber also be drawn first-person?
+
+## Original phase notes (history)
+
+**Phase 0 (setup):** Valheim (native Linux) + BepInEx installed; OpenJK built from `third_party/OpenJK` with the Outcast targets (`buildjo/`, not the Jedi Academy ones); `third_party/jk2run` has symlinks to the build and the Steam game files. Hello plugin loaded in Valheim (version 1.0.20, BepInEx 5.4.23.5); Outcast runs under OpenJK and `map kejim_post` loads.
+
+**Phase 1 (connection):** spec in `protocol/PROTOCOL.md`; Python, C and C# links pass the golden packets and the connect/lose tests (`tools/test_protocol.py`, `tools/test_c.sh`, `tools/test_csharp.sh`). Confirmed with the real games (`link: connected`). Outcast stops ticking while a map loads, so a long load can show a brief "lost connection".
+
+**Phase 2 (player sync):** walking and turning in Outcast moves and turns the Valheim character. `tools/fake_player.py` walks the Valheim player in a circle without Outcast.
+
+**Phase 3 (terrain collision):** see "Feature notes". The bridge switches on only when the player is free and standing on the level's floor, and off for cutscenes and death.
+
+**Phase 4 (creatures and combat):** see "Feature notes". Test helper: `VO_DEBUG_HIT=1`.
+
+**Phase 5 (rendering):** see "How it fits together" and "Feature notes". `protocol/FRAME.md` is the file spec.
+
+**Phase 6 (world sync and polish):** everything under "Feature notes" and "Status" beyond the first five phases.
+
+**Phase 7 (release):** basic. Everything builds from this folder (see `README.md`); `tools/test_all.sh` runs all tests that need no game.
+
+## Size
+
+About 4,900 lines of our own code (C#, C/C++, Python, shell), plus an 800-line patch to OpenJK.
