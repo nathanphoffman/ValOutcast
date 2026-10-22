@@ -39,17 +39,17 @@ Valheim plugin parts, controls and Valheim-specific lessons: `docs/worlds/valhei
 - Build: `cd valheim && dotnet build` (copies into Valheim). Outcast: `tools/apply_outcast.sh`, then `cd third_party/OpenJK/buildjo && make -j$(nproc)`.
 - Run: start Valheim, load a world, then `tools/run_outcast.sh [map] [width height]`.
 - Tests without games: `tools/test_all.sh` (close the real games first, they use the same ports).
-- Fake partner: `tools/start_test_session.sh <options>` / `tools/stop_test_session.sh` (logs in `/tmp/valoutcast_test/`). See `tools/fake_world.py` for options.
+- Fake partner: `tools/start_test_session.sh <options>` / `tools/stop_test_session.sh` (logs in `/tmp/valoutcast_test/`). See `tools/fake_world.py` for options (`--weapon 14` is the cheat, `--power N` presses force power N).
 - Look at the picture: `tools/dump_frame.py out.png`. Look inside Valheim: `dotnet run --project tools/worlds/valheim/valheim_il -- members|calls|il|callers ...`. After a Valheim update run `tools/worlds/valheim/check_valheim_api.sh`.
 - Adding a message touches: `vo_link.h/c`, `vo_protocol.py`, `VoLink.cs`, `tools/make_golden.py` (rerun to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
 
 ## Controls
 
-WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
+WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **F1-F7** force powers (push, pull, speed, mind trick, heal, grip, lightning). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
 
 ## Debug switches (env)
 
-`VO_OVERLAY=1` overlay mode (set by `run_outcast.sh`), `VO_OVERLAY_VISIBLE=1` show Outcast's window, `VO_SV_FPS` (60), `VO_GIVE_ALL=1` (ammo only), `VO_BOLT_SPEED` (0.3), `VO_FIELD_BOX` (0.7), `VO_DEBUG_BOLTS=1`, `VO_DEBUG=1`. Outcast cvar `s_show 1` logs every sound. Valheim log: `BepInEx/LogOutput.log` (`link:`, `overlay:`, `perf:`, `creatures:`, `items:`, `cheat:`).
+`VO_OVERLAY=1` overlay mode (set by `run_outcast.sh`), `VO_OVERLAY_VISIBLE=1` show Outcast's window, `VO_SV_FPS` (60), `VO_GIVE_ALL=1` (ammo only), `VO_BOLT_SPEED` (0.3), `VO_FIELD_BOX` (0.7), `VO_DEBUG_BOLTS=1`, `VO_DEBUG_FORCE=1` (force pool log), `VO_DEBUG=1`. Outcast cvar `s_show 1` logs every sound. Valheim log: `BepInEx/LogOutput.log` (`link:`, `overlay:`, `perf:`, `creatures:`, `items:`, `cheat:`).
 
 ## Lessons (read before debugging)
 

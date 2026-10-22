@@ -23,6 +23,12 @@ MSG_LOADOUT = 14
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
+ABILITY_COUNT = 7
+
+
+def button_ability(n):
+    """Button bit of ability n (1 to 7): bits 3 to 9."""
+    return 8 << (n - 1)
 ACTOR_HOSTILE = 1
 CHUNK_CELLS = 16
 CELL_SIZE_M = 0.5

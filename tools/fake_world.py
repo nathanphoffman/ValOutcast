@@ -9,7 +9,8 @@ Options: --walk   send Input (walk forward, slowly turning) as if the Valheim wi
          --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
-         --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting
+         --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting (14 = the cheat: everything)
+         --power N  press ability N (1 to 7: push, pull, speed, mind trick, heal, grip, lightning) for 1 s every 4 s, from 6 s on
          --dark   send a dim, bluish world light (night) instead of bright daylight
          --nowall leave out the ring wall (flat ground all around)
          --hurt   send PlayerHurt (10 damage) every 8 seconds
@@ -41,6 +42,7 @@ HURT = "--hurt" in sys.argv
 FIRE = "--fire" in sys.argv
 DARK = "--dark" in sys.argv
 ALT = "--alt" in sys.argv
+POWER = int(sys.argv[sys.argv.index("--power") + 1]) if "--power" in sys.argv else 0
 WEAPON = int(sys.argv[sys.argv.index("--weapon") + 1]) if "--weapon" in sys.argv else 0
 
 
@@ -100,6 +102,8 @@ try:
             forward = 1.0 if WALK else 0.0
             yaw = TURN_RATE if TURN else (0.0 if (NOWALL or not WALK) else 0.5)
             buttons = (vo.BUTTON_ATTACK if FIRE else 0) | (vo.BUTTON_ALT_ATTACK if ALT else 0)
+            if POWER and started_at is not None and now - started_at > 6 and (now - started_at - 6) % 4 < 1:
+                buttons |= vo.button_ability(POWER)
             weapon = 0
             if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:
                 weapon, weapon_sent = WEAPON, True

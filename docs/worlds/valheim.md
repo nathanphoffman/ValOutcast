@@ -30,7 +30,7 @@ Shared connection code (`VoLink.cs`, `FrameReader.cs`) is in `worlds/common/`.
 
 ## Controls
 
-WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
+WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **F1-F7** force powers, as in Outcast (push, pull, speed, mind trick, heal, grip and lightning; hold F6/F7). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
 
 ## Lessons
 

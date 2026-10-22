@@ -27,6 +27,9 @@ extern "C" {
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
+/* Abilities 1 to 7: bits 3 to 9 (value 8 << (n - 1)). Outcast: 1 push, 2 pull, 3 speed, 4 mind trick, 5 heal (fire on press), 6 grip, 7 lightning (while held). */
+#define VO_BUTTON_ABILITY(n) (8u << ((n) - 1))
+#define VO_ABILITY_COUNT 7
 #define VO_ACTOR_HOSTILE 1
 #define VO_CHUNK_CELLS 16
 #define VO_CELL_SIZE_M 0.5f

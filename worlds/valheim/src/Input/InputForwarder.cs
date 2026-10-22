@@ -15,6 +15,11 @@ namespace ValOutcast
         private int _weapon;
         private bool _giveAll;
 
+        private static readonly KeyCode[] AbilityKeys =
+        {
+            KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4, KeyCode.F5, KeyCode.F6, KeyCode.F7
+        };
+
         private static bool Button(string name)
         {
             return ZInput.GetButton(name);
@@ -92,6 +97,11 @@ namespace ValOutcast
                 // Valheim calls right click "Block" and middle click "SecondaryAttack": both are Outcast's alternate fire.
                 if (Button("SecondaryAttack") || Button("Block")) buttons |= VoLink.ButtonAltAttack;
                 if (Button("Use") || Button("AltPlace")) buttons |= VoLink.ButtonUse;
+                // Force powers, on the same keys as Outcast: F1 push, F2 pull, F3 speed, F4 mind trick, F5 heal, F6 grip, F7 lightning.
+                for (int i = 0; i < AbilityKeys.Length; i++)
+                {
+                    if (ZInput.GetKey(AbilityKeys[i])) buttons |= VoLink.ButtonAbility(i + 1);
+                }
             }
 
             float forward = (Button("Forward") ? 1f : 0f) - (Button("Backward") ? 1f : 0f);

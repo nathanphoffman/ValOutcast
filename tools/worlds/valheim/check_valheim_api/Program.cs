@@ -103,6 +103,7 @@ class Program
         Field("ZoneSystem", "s_instance");
         // Input and menus
         Method("ZInput", "GetButton", 1);
+        Method("ZInput", "GetKey", 2);
         Method("ZInput", "GetMouseDelta", 0);
         Method("ZInput", "IsMouseActive", 0);
         Field("PlayerController", "m_mouseSens", "Single");

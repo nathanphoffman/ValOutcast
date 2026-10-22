@@ -29,6 +29,9 @@ namespace ValOutcast
         public const uint ButtonAttack = 1;
         public const uint ButtonAltAttack = 2;
         public const uint ButtonUse = 4;
+        public const int AbilityCount = 7;
+        /// <summary>Button bit of ability n (1 to 7): bits 3 to 9.</summary>
+        public static uint ButtonAbility(int n) { return 8u << (n - 1); }
         public const byte ActorHostile = 1;
         public const int ChunkCells = 16;
         public const float CellSizeM = 0.5f;

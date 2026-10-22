@@ -51,6 +51,8 @@ static vo_input s_input;
 static uint32_t s_inputMs = 0;
 static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while Valheim drives the view
 static qboolean s_inputLive = qfalse;
+static uint32_t s_abilityLatch = 0;   // ability presses not yet seen by a game frame
+static uint32_t s_abilityPrev = 0;    // abilities that were down at the last game frame (to find new presses)
 static uint32_t s_buttonLatch = 0;   // button presses not yet used by a game frame (a click can be shorter than a frame)
 static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous, 12 Valheim tool mode on (weapon put away), 13 tool mode off, 14 cheat: give everything
 
@@ -234,6 +236,7 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 		if (vo_decode_input(payload, len, &in) == 0) {
 			s_input.buttons = in.buttons;
 			s_buttonLatch |= in.buttons;
+			s_abilityLatch |= in.buttons;
 			if (in.weapon != 0) s_weaponRequest = in.weapon;
 			s_input.forward = in.forward;
 			s_input.right = in.right;
@@ -264,6 +267,7 @@ void VO_Init(void)
 	memset(&s_input, 0, sizeof(s_input));
 	s_inputLive = qfalse;
 	s_buttonLatch = 0;
+	s_abilityLatch = s_abilityPrev = 0;
 	s_weaponRequest = 0;
 	s_gaveAll = qfalse;
 	s_saberReady = qfalse;
@@ -341,6 +345,24 @@ void VO_Frame(void)
 		for (int i = AMMO_BLASTER; i < AMMO_MAX; i++) ent->client->ps.ammo[i] = 999;
 	}
 
+	// Force powers: abilities 1 to 5 run Outcast's own force_* commands when pressed (grip and lightning are held buttons, see
+	// VO_ForceButtons).
+	{
+		static const char *const instantCmd[5] = { "force_throw\n", "force_pull\n", "force_speed\n", "force_distract\n", "force_heal\n" };
+		const uint32_t down = s_input.buttons | s_abilityLatch;
+		s_abilityLatch = 0;
+		const uint32_t pressed = down & ~s_abilityPrev;
+		s_abilityPrev = s_input.buttons;
+		if (s_active && getenv("VO_DEBUG_FORCE") && (level.framenum % 20) == 0) {
+			gi.Printf("ValOutcast: force pool %d/%d, known %x, active %x\n", ent->client->ps.forcePower, ent->client->ps.forcePowerMax, ent->client->ps.forcePowersKnown, ent->client->ps.forcePowersActive);
+		}
+		if (s_active) {
+			for (int n = 1; n <= 5; n++) {
+				if (pressed & VO_BUTTON_ABILITY(n)) gi.SendConsoleCommand(instantCmd[n - 1]);
+			}
+		}
+	}
+
 	if (s_weaponRequest != 0) {
 		if (s_active) {
 			char cmd[32];
@@ -359,6 +381,7 @@ void VO_Frame(void)
 				s_cheatAll = qtrue;
 				for (int i = 0; i < NUM_FORCE_POWERS; i++) ent->client->ps.forcePowerLevel[i] = FORCE_LEVEL_3;
 				ent->client->ps.forcePowersKnown = (1 << NUM_FORCE_POWERS) - 1;
+				if (ent->client->ps.forcePowerMax <= 0) ent->client->ps.forcePowerMax = FORCE_POWER_MAX;
 				ent->client->ps.forcePower = ent->client->ps.forcePowerMax;
 				cmd[0] = 0;
 			} else if (s_weaponRequest == 13) {
@@ -515,6 +538,17 @@ void VO_PlayerTrace(trace_t *results, const vec3_t start, const vec3_t mins, con
 		results->contents = CONTENTS_SOLID;
 		results->entityNum = ENTITYNUM_WORLD;
 	}
+}
+
+// Called before the game's force power update, which is earlier in the frame than VO_ModifyUserCmd: the held powers (grip,
+// lightning) have to be in the usercmd by then.
+void VO_ForceButtons(gentity_t *ent, usercmd_t *ucmd)
+{
+	if (!s_open || !s_active || !s_inputLive || ent->s.number != 0 || !ent->client) return;
+	const uint32_t buttons = s_input.buttons | s_buttonLatch;
+	ucmd->buttons &= ~(BUTTON_FORCEGRIP | BUTTON_FORCE_LIGHTNING);
+	if (buttons & VO_BUTTON_ABILITY(6)) ucmd->buttons |= BUTTON_FORCEGRIP;
+	if (buttons & VO_BUTTON_ABILITY(7)) ucmd->buttons |= BUTTON_FORCE_LIGHTNING;
 }
 
 void VO_ModifyUserCmd(gentity_t *ent, usercmd_t *ucmd)
