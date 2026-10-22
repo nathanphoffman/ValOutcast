@@ -53,7 +53,7 @@ Then make `third_party/jk2run` with links to the three built files and your game
 
 While Outcast drives: WASD, mouse, jump, crouch, left and right click and Use work as in Valheim. The hotbar number keys 1-8 pick an Outcast weapon, and the mouse wheel goes to the next or previous one. Esc still opens Valheim's menu.
 
-`tools/run_outcast.sh` gives you every weapon, the lightsaber included, for testing (`VO_GIVE_ALL=` with nothing after it turns that off). Outcast stays silent until you are in a Valheim world. Typing `valleyofthejedi` in Valheim's chat box (Enter, type, Enter) gives every weapon with full ammo and all force powers.
+You can only use the weapons you own: the stun baton at the start, and the others as you craft them in Valheim. `tools/run_outcast.sh` also gives 999 of every ammo for testing until ammo can be crafted (`VO_GIVE_ALL=` with nothing after it turns that off). Outcast stays silent until you are in a Valheim world. Typing `valleyofthejedi` in Valheim's chat box (Enter, type, Enter) gives every weapon with full ammo and all force powers.
 
 R switches between Outcast weapons and Valheim's own items (tool mode: sword, bow, hammer, hoe, torch). In tool mode the hotbar comes back and Valheim handles the mouse buttons; press R again to go back to Outcast. E (Use) works on what the crosshair is over: doors, berries, items on the ground. Chests, crafting stations, signs, traders and the inventory (Tab) open Valheim's own menus: Outcast stands still and its picture is hidden while one is open. Shots and the lightsaber damage trees, rocks and ore.
 

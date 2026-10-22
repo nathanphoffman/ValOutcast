@@ -46,6 +46,7 @@ class Program
         Check(VoLink.EncodePlayerHurt(9, 10f, new float[] { 1, 0, 0 }, 42).AsSpan().SequenceEqual(Golden("player_hurt")), "player_hurt bytes");
         Check(VoLink.EncodeInput(10, 3, 1f, -1f, 0f, 0.5f, -0.5f, 4).AsSpan().SequenceEqual(Golden("input")), "input bytes");
         Check(VoLink.EncodeWorldContext(11, new float[] { 0f, 0.8f, 0.6f }, new float[] { 1f, 0.9f, 0.5f }, new float[] { 0.25f, 0.5f, 0.75f }).AsSpan().SequenceEqual(Golden("world_context")), "world_context bytes");
+        Check(VoLink.EncodeLoadout(14, 0x2004).AsSpan().SequenceEqual(Golden("loadout")), "loadout bytes");
         Check(VoLink.EncodePlayerLight(13, new float[] { 0.25f, 0.5f, 1f }, 0.75f).AsSpan().SequenceEqual(Golden("player_light")), "player_light bytes");
         Check(VoLink.DecodePlayerLight(Golden("player_light"), 24, out var lightMsg) && lightMsg.B == 1f && lightMsg.Intensity == 0.75f, "player_light decode");
         Check(!VoLink.DecodePlayerLight(Golden("player_light"), 12, out _), "player_light short");

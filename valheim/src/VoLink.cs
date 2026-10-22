@@ -25,6 +25,7 @@ namespace ValOutcast
         public const byte MsgInput = 10;
         public const byte MsgWorldContext = 11;
         public const byte MsgPlayerLight = 13;
+        public const byte MsgLoadout = 14;
         public const uint ButtonAttack = 1;
         public const uint ButtonAltAttack = 2;
         public const uint ButtonUse = 4;
@@ -229,6 +230,20 @@ namespace ValOutcast
             BitConverter.GetBytes(pitch).CopyTo(b, 28);
             BitConverter.GetBytes(weapon).CopyTo(b, 32);
             return b;
+        }
+
+        public static byte[] EncodeLoadout(uint seq, uint weapons)
+        {
+            var b = new byte[12];
+            WriteHeader(b, MsgLoadout, seq);
+            BitConverter.GetBytes(weapons).CopyTo(b, 8);
+            return b;
+        }
+
+        /// <summary>Tells the player side which weapons the player owns (bit n = the player side's weapon number n).</summary>
+        public void SendLoadout(uint weapons)
+        {
+            if (Connected) SendPacket(EncodeLoadout(++_seq, weapons));
         }
 
         public static byte[] EncodePlayerLight(uint seq, float[] rgb, float intensity)

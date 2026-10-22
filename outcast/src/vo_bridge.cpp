@@ -61,6 +61,10 @@ static VO_PointContentsFn s_realPointContents = NULL;
 static qboolean s_playerOnField = qfalse;   // the player's own spot is covered by measured Valheim ground
 static qboolean s_audioOn = qfalse;
 static qboolean s_gaveAll = qfalse;
+static uint32_t s_ownedMask = 0;        // weapons the world side says the player owns (bit n = weapon number n)
+static qboolean s_loadoutKnown = qfalse;
+static qboolean s_cheatAll = qfalse;    // the cheat code was used: every weapon, whatever the world side says. Kept for the whole run.
+static qboolean s_saberReady = qfalse;  // the saber's blade has been set up on this level
 
 extern void G_Give( gentity_t *ent, const char *name, const char *args, int argc );
 extern void WP_SaberInitBladeData( gentity_t *ent );
@@ -216,6 +220,12 @@ static void VO_OnMessage(void *user, int type, const uint8_t *payload, int len)
 	} else if (type == VO_MSG_PLAYER_HURT) {
 		vo_hurt h;
 		if (vo_decode_player_hurt(payload, len, &h) == 0) VO_ApplyPlayerHurt(&h);
+	} else if (type == VO_MSG_LOADOUT) {
+		uint32_t weapons;
+		if (vo_decode_loadout(payload, len, &weapons) == 0) {
+			s_ownedMask = weapons;
+			s_loadoutKnown = qtrue;
+		}
 	} else if (type == VO_MSG_WORLD_CONTEXT) {
 		vo_world w;
 		if (vo_decode_world_context(payload, len, &w) == 0) VO_ApplyWorldContext(&w);
@@ -256,6 +266,7 @@ void VO_Init(void)
 	s_buttonLatch = 0;
 	s_weaponRequest = 0;
 	s_gaveAll = qfalse;
+	s_saberReady = qfalse;
 	s_audioOn = qfalse;
 	if (vo_link_open(&s_link, VO_ROLE_PLAYER, VO_Log) == 0) {
 		s_link.on_message = VO_OnMessage;
@@ -300,10 +311,30 @@ void VO_Frame(void)
 	if (s_active && !s_gaveAll && getenv("VO_GIVE_ALL")) {
 		s_gaveAll = qtrue;
 		const qboolean hadSaber = (ent->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) ? qtrue : qfalse;
-		G_Give(ent, "all", "", 1);
+		G_Give(ent, "all", "", 1);   // ammo, armor and so on; the weapon list is then replaced by the Valheim inventory (below)
 		// Picking up the saber normally also sets up its blade (and the saber object the blade is drawn from).
 		// "give all" skips that, so a level where Kyle starts without the saber would show no blade.
 		if (!hadSaber) WP_SaberInitBladeData(ent);
+		s_saberReady = qtrue;
+	}
+	// Weapons come from the world side's inventory (the crafted items), unless the cheat code was used.
+	if (s_active && s_loadoutKnown && !s_cheatAll) {
+		const int allWeapons = (1 << (MAX_PLAYER_WEAPONS + 1)) - (1 << WP_SABER);   // weapon numbers 1 to 13
+		const int owned = (int)s_ownedMask & allWeapons;
+		if ((owned & (1 << WP_SABER)) && !s_saberReady) {
+			WP_SaberInitBladeData(ent);   // the blade is not set up when the saber is only "given"
+			s_saberReady = qtrue;
+		}
+		ent->client->ps.stats[STAT_WEAPONS] = owned;
+		if (owned != 0 && !(owned & (1 << ent->client->ps.weapon)) && (level.framenum % 30) == 0) {
+			// The weapon in hand is not (or no longer) owned: pick the first one that is.
+			for (int w = WP_SABER; w <= MAX_PLAYER_WEAPONS; w++) {
+				if (owned & (1 << w)) {
+					gi.SendConsoleCommand(va("weapon %d\n", w));
+					break;
+				}
+			}
+		}
 	}
 	// ...and topped up now and then, so nothing runs out while testing (thermal detonators and the like included).
 	if (s_active && s_gaveAll && getenv("VO_GIVE_ALL") && (level.framenum % 30) == 0) {
@@ -324,6 +355,8 @@ void VO_Frame(void)
 				const qboolean hadSaber = (ent->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) ? qtrue : qfalse;
 				G_Give(ent, "all", "", 1);
 				if (!hadSaber) WP_SaberInitBladeData(ent);
+				s_saberReady = qtrue;
+				s_cheatAll = qtrue;
 				for (int i = 0; i < NUM_FORCE_POWERS; i++) ent->client->ps.forcePowerLevel[i] = FORCE_LEVEL_3;
 				ent->client->ps.forcePowersKnown = (1 << NUM_FORCE_POWERS) - 1;
 				ent->client->ps.forcePower = ent->client->ps.forcePowerMax;

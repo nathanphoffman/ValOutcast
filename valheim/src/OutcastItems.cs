@@ -20,13 +20,14 @@ namespace ValOutcast
             public string Station;                       // crafting station prefab name, null = given at the start instead
             public (string prefab, int amount)[] Cost;
             public bool GiveAtStart;
+            public int Weapon;                           // the player side's weapon number (Outcast: 2 = bryar pistol, 13 = stun baton, ...)
         }
 
         private static readonly Def[] Defs =
         {
-            new Def { Id = "VO_StunBaton", Name = "Stun Baton", Icon = "stun_baton.png", GiveAtStart = true,
+            new Def { Id = "VO_StunBaton", Name = "Stun Baton", Icon = "stun_baton.png", GiveAtStart = true, Weapon = 13,
                       Description = "A crackling stun baton. You start with one." },
-            new Def { Id = "VO_BryarPistol", Name = "Bryar Pistol", Icon = "bryar_pistol.png", Station = "piece_workbench",
+            new Def { Id = "VO_BryarPistol", Name = "Bryar Pistol", Icon = "bryar_pistol.png", Weapon = 2, Station = "piece_workbench",
                       Description = "A small blaster pistol, hand built from forest scraps.",
                       Cost = new[] { ("Wood", 8), ("Flint", 10), ("LeatherScraps", 4), ("Resin", 5) } },
         };
@@ -66,6 +67,7 @@ namespace ValOutcast
                     if (recipe != null) { db.m_recipes.Add(recipe); added = true; }
                 }
             }
+            if (added) Plugin.LogMessage("items: registered " + string.Join(", ", Defs.Select(d => d.Name)));
             if (added) AccessTools.Method(typeof(ObjectDB), "UpdateRegisters").Invoke(db, null);   // private: rebuilds the by-name lookups
         }
 
@@ -93,10 +95,31 @@ namespace ValOutcast
             {
                 string key = GivenKeyPrefix + def.Id;
                 if (player.m_customData.ContainsKey(key)) continue;
-                player.m_customData[key] = "1";
                 if (player.GetInventory().AddItem(def.Id, 1, 1, 0, 0L, "", false) != null)
+                {
+                    player.m_customData[key] = "1";   // only once it really is in the inventory, so a failed try is repeated
                     Plugin.LogMessage("items: gave " + def.Name);
+                }
             }
+        }
+
+        /// <summary>
+        /// Bit mask of the player side's weapons that the player owns (bit n = weapon number n): the items in the inventory.
+        /// Also makes sure the items are registered and the start items given, in case the early hooks ran too soon to catch it.
+        /// </summary>
+        public static uint OwnedWeapons(Player player)
+        {
+            if (player == null || player.GetInventory() == null) return 0;
+            if (ObjectDB.instance != null && !ObjectDB.instance.m_items.Any(i => i != null && i.name == Defs[0].Id)) Register(ObjectDB.instance);
+            if (ZNetScene.instance != null) RegisterPrefabs(ZNetScene.instance);
+            GiveStartItems(player);
+            uint mask = 0;
+            foreach (ItemDrop.ItemData item in player.GetInventory().GetAllItems())
+            {
+                Def def = Defs.FirstOrDefault(d => d.Weapon > 0 && item.m_dropPrefab != null && item.m_dropPrefab.name == d.Id);
+                if (def != null) mask |= 1u << def.Weapon;
+            }
+            return mask;
         }
 
         private static GameObject Make(GameObject template, Def def)

@@ -4,12 +4,10 @@ THIS IS FOR NATE HUMAN ONLY
 
 ## Testing
 - Are saves working?
-- Are item unlocks working
 - Are cheats working?
 - Was fixed? - When I try to pull up the workbench menu it immediately exits
 
 ## General Bugs
-- why do I have all weapons if we are doing unlocks now -- only the cheat should allow that?
 - why do all my valheim weapons show "0" and they cant be used like as if they have full damage
 
 ## Gender model switches

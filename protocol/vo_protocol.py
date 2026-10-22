@@ -19,6 +19,7 @@ MSG_INPUT = 10
 MSG_WORLD_CONTEXT = 11
 MSG_HIT_WORLD = 12
 MSG_PLAYER_LIGHT = 13
+MSG_LOADOUT = 14
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -128,6 +129,17 @@ def decode_player_light(payload):
         return None
     v = struct.unpack_from("<4f", payload)
     return v[0:3], v[3]
+
+
+def encode_loadout(seq, weapons):
+    return _HEADER.pack(MAGIC, VERSION, MSG_LOADOUT, seq) + struct.pack("<I", weapons)
+
+
+def decode_loadout(payload):
+    """Return the weapon bit mask or None."""
+    if len(payload) < 4:
+        return None
+    return struct.unpack_from("<I", payload)[0]
 
 
 def encode_player_hurt(seq, damage, direction, source):
@@ -250,7 +262,7 @@ class Link:
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
                 MSG_HIT_ACTOR: decode_hit_actor, MSG_HIT_WORLD: decode_hit_world, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
-                MSG_PLAYER_LIGHT: decode_player_light,
+                MSG_PLAYER_LIGHT: decode_player_light, MSG_LOADOUT: decode_loadout,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

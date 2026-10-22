@@ -110,6 +110,14 @@ int main(int argc, char **argv)
 		check(vo_decode_input(want + 8, 24, &in2) == -1, "input without weapon is short");
 
 		{
+			uint32_t mask = 0;
+			n = golden("loadout", want, 64);
+			check(n > 0 && vo_encode_loadout(got, 14, 0x2004) == n && memcmp(got, want, n) == 0, "loadout bytes");
+			check(vo_decode_loadout(want + 8, n - 8, &mask) == 0 && mask == 0x2004, "loadout decode");
+			check(vo_decode_loadout(want + 8, 2, &mask) == -1, "loadout short");
+		}
+
+		{
 			const float lrgb[3] = { 0.25f, 0.5f, 1.0f };
 			n = golden("player_light", want, 64);
 			check(n > 0 && vo_encode_player_light(got, 13, lrgb, 0.75f) == n && memcmp(got, want, n) == 0, "player_light bytes");

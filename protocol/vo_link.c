@@ -178,6 +178,23 @@ int vo_encode_player_light(uint8_t *out, uint32_t seq, const float rgb[3], float
 	return 24;
 }
 
+int vo_encode_loadout(uint8_t *out, uint32_t seq, uint32_t weapons)
+{
+	put_header(out, VO_MSG_LOADOUT, seq);
+	out[8] = (uint8_t)(weapons & 0xFF);
+	out[9] = (uint8_t)((weapons >> 8) & 0xFF);
+	out[10] = (uint8_t)((weapons >> 16) & 0xFF);
+	out[11] = (uint8_t)((weapons >> 24) & 0xFF);
+	return 12;
+}
+
+int vo_decode_loadout(const uint8_t *payload, int len, uint32_t *weapons)
+{
+	if (len < 4) return -1;
+	*weapons = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8) | ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 24);
+	return 0;
+}
+
 int vo_encode_player_hurt(uint8_t *out, uint32_t seq, const vo_hurt *h)
 {
 	int i;

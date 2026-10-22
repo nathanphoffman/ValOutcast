@@ -23,6 +23,7 @@ extern "C" {
 #define VO_MSG_WORLD_CONTEXT 11
 #define VO_MSG_HIT_WORLD 12
 #define VO_MSG_PLAYER_LIGHT 13
+#define VO_MSG_LOADOUT 14
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -117,6 +118,9 @@ void vo_link_send_hit_world(vo_link *link, const float pos[3], const float dir[3
 /* PlayerLight: a light the player carries (for example a lit lightsaber). color 0..1 per channel, intensity 0 = off. 24 bytes. */
 int vo_encode_player_light(uint8_t *out, uint32_t seq, const float rgb[3], float intensity);
 void vo_link_send_player_light(vo_link *link, const float rgb[3], float intensity);
+/* Loadout: which weapons the world side says the player owns, as a bit mask (bit n = the player side's weapon number n). 12 bytes. */
+int vo_encode_loadout(uint8_t *out, uint32_t seq, uint32_t weapons);
+int vo_decode_loadout(const uint8_t *payload, int len, uint32_t *weapons);
 /* Returns the message type, or -1 if the packet is not valid. */
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out);
 
