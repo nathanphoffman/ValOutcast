@@ -9,9 +9,6 @@ namespace ValOutcast
     /// </summary>
     public class WorldHits
     {
-        private const float SearchRadius = 0.9f;   // a column face is at most about half a cell (0.5 m) from the real surface
-        /// <summary>Valheim tool tier of the blow. 4 lets the lightsaber and the guns cut or break anything.</summary>
-        public static short ToolTier = 4;
 
         private int _applied, _nothing;
         private float _nextReport;
@@ -44,7 +41,7 @@ namespace ValOutcast
             IDestructible best = null;
             Collider bestCollider = null;
             float bestDistance = float.MaxValue;
-            foreach (Collider c in Physics.OverlapSphere(point, SearchRadius, ~0, QueryTriggerInteraction.Ignore))
+            foreach (Collider c in Physics.OverlapSphere(point, Tuning.WorldHitSearchRadius, ~0, QueryTriggerInteraction.Ignore))
             {
                 IDestructible d = c.GetComponentInParent<IDestructible>();
                 // Creatures are hit through their own boxes. Players' buildings are left alone: a stray shot should not wreck a base.
@@ -68,7 +65,7 @@ namespace ValOutcast
             // Not knowing what it is (tree, rock, ore), the blow counts as both an axe and a pickaxe; each thing takes the one it is weak to.
             hit.m_damage.m_chop = msg.Damage;
             hit.m_damage.m_pickaxe = msg.Damage;
-            hit.m_toolTier = ToolTier;
+            hit.m_toolTier = Tuning.WorldHitToolTier;
             hit.m_point = point;
             hit.m_dir = dir;
             hit.m_hitCollider = bestCollider;

@@ -97,14 +97,14 @@ All original phases (setup, connection, player sync, terrain collision, creature
 6. Crafted weapons: remaining 11 items (icons are `gfx/hud/w_icon_*.tga` in Outcast's pk3s), ammo items, ammo counter following the Valheim stack. No Jotunn; register items with our own Harmony patches. Unlock order (first guess): stun baton at start, bryar pistol Meadows, E-11 Black Forest, bowcaster Swamp, repeater Mountain, flechette Plains, lightsaber Mistlands, rocket launcher Ashlands, the rest Deep North.
 7. Lightsaber first-person view, saving Outcast state in `Player.m_customData`, weather, save syncing, multiplayer (long term), release polish (installer, Windows).
 
-## Restructure (decided 2026-10-22; phases 1-4 done: folders moved, paths fixed, shared C# in `worlds/common/`, Valheim tools and notes split out, tests pass; the rest is not done)
+## Restructure (decided 2026-10-22; phases 1-5 done: folders moved, paths fixed, shared C# in `worlds/common/`, Valheim tools and notes split out, Valheim files grouped by job with numbers in `Config/Tuning.cs` and `Items/ItemCatalog.cs`, tests pass; the rest is not done)
 
 Goal: the player side may change games and the world side will change games; neither should need a rewrite of the shared parts.
 
 1. DONE: `outcast/` is now `player/outcast/`; `valheim/` is now `worlds/valheim/`.
 2. DONE: moved `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/vo_link.c`.
 3. DONE: Valheim-only tools moved to `tools/worlds/valheim/`; per-game notes to `docs/worlds/valheim.md`.
-4. Every world plugin does the same jobs with the same file names: Input, Collision, Actors, Combat, Lighting, Overlay. A new game starts as a copy.
+4. DONE (Valheim): every world plugin does the same jobs with the same file names: Input, Player, Collision, Combat, Lighting, Overlay, Items. A new game starts as a copy.
 5. Per-game numbers (damage scale, item-to-weapon mapping) live in that world's folder. The weapon list belongs to the player side.
 6. Update paths in scripts (`apply_outcast.sh`, `run_outcast.sh`, tests, csproj), `README.md` and `.gitignore`. Run `tools/test_all.sh` after.
 7. Known gap: collision is a height grid, which fits terrain. A level with walls and ceilings (Doom) needs a new message type and a protocol version bump. Also check `HitWorld.kind` (0 shot, 1 saber): it leaks Outcast ideas into the protocol.

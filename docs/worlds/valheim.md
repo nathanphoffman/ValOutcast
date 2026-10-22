@@ -4,7 +4,22 @@ The Valheim side of ValOutcast: a BepInEx 5 + Harmony plugin in `worlds/valheim/
 
 ## Plugin parts (`worlds/valheim/src/`)
 
-`Plugin` (calls each part per frame; a part that throws switches itself off), `InputForwarder` (keys, mouse, menus), `PlayerFollow` (moves player and camera), `TerrainStreamer` (0.5 m ground columns in 8 m chunks), `Combat` (creatures out, hits in, damage to player), `WorldHits` (trees/rocks), `Interactor` (E key), `ToolMode` + `HeldItemView` (R key, Valheim's own items), `OutcastItems` + `Loadout` (weapons as craftable items, weapon limit), `CheatCode` (`valleyofthejedi`), `SaberGlow`, `WorldLight`, `Overlay`, `HudHider`, `PerfStats`, `TestSpawner` (F8 boar). Shared connection code (`VoLink.cs`, `FrameReader.cs`) is in `worlds/common/`.
+Grouped by job, so another world plugin can use the same folder names. All code is in the `ValOutcast` namespace.
+
+| Folder | Files |
+|---|---|
+| (root) | `Plugin` (calls each part per frame; a part that throws switches itself off) |
+| `Input/` | `InputForwarder` (keys, mouse, menus), `Interactor` (E key), `CheatCode` (`valleyofthejedi`) |
+| `Player/` | `PlayerFollow` (moves player and camera) |
+| `Collision/` | `TerrainStreamer` (0.5 m ground columns in 8 m chunks) |
+| `Combat/` | `Combat` (creatures out, hits in, damage to player), `WorldHits` (trees/rocks) |
+| `Lighting/` | `WorldLight`, `SaberGlow` |
+| `Overlay/` | `Overlay`, `HudHider`, `ToolMode` + `HeldItemView` (R key, Valheim's own items) |
+| `Items/` | `OutcastItems` + `Loadout` (weapons as craftable items, weapon limit), `ItemCatalog` (which item is which Outcast weapon, and its cost) |
+| `Config/` | `Tuning` (Valheim-specific numbers: damage scale, creature range, tool tier, grace time) |
+| `Debug/` | `PerfStats`, `TestSpawner` (F8 boar) |
+
+Shared connection code (`VoLink.cs`, `FrameReader.cs`) is in `worlds/common/`.
 
 ## Build and tools
 

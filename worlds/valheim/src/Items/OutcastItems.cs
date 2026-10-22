@@ -14,24 +14,6 @@ namespace ValOutcast
     /// </summary>
     public static class OutcastItems
     {
-        private class Def
-        {
-            public string Id, Name, Description, Icon;
-            public string Station;                       // crafting station prefab name, null = given at the start instead
-            public (string prefab, int amount)[] Cost;
-            public bool GiveAtStart;
-            public int Weapon;                           // the player side's weapon number (Outcast: 2 = bryar pistol, 13 = stun baton, ...)
-        }
-
-        private static readonly Def[] Defs =
-        {
-            new Def { Id = "VO_StunBaton", Name = "Stun Baton", Icon = "stun_baton.png", GiveAtStart = true, Weapon = 13,
-                      Description = "A crackling stun baton. You start with one." },
-            new Def { Id = "VO_BryarPistol", Name = "Bryar Pistol", Icon = "bryar_pistol.png", Weapon = 2, Station = "piece_workbench",
-                      Description = "A small blaster pistol, hand built from forest scraps.",
-                      Cost = new[] { ("Wood", 8), ("Flint", 10), ("LeatherScraps", 4), ("Resin", 5) } },
-        };
-
         private const string GivenKeyPrefix = "vo_given_";
         private static GameObject _holder;
         private static readonly Dictionary<string, Sprite> Icons = new Dictionary<string, Sprite>();
@@ -52,7 +34,7 @@ namespace ValOutcast
             }
 
             bool added = false;
-            foreach (Def def in Defs)
+            foreach (ItemDef def in ItemCatalog.All)
             {
                 GameObject prefab = db.m_items.FirstOrDefault(i => i != null && i.name == def.Id);
                 if (prefab == null)
@@ -67,7 +49,7 @@ namespace ValOutcast
                     if (recipe != null) { db.m_recipes.Add(recipe); added = true; }
                 }
             }
-            if (added) Plugin.LogMessage("items: registered " + string.Join(", ", Defs.Select(d => d.Name)));
+            if (added) Plugin.LogMessage("items: registered " + string.Join(", ", ItemCatalog.All.Select(d => d.Name)));
             if (added) AccessTools.Method(typeof(ObjectDB), "UpdateRegisters").Invoke(db, null);   // private: rebuilds the by-name lookups
         }
 
@@ -76,7 +58,7 @@ namespace ValOutcast
         {
             if (scene == null || ObjectDB.instance == null) return;
             var named = (Dictionary<int, GameObject>)AccessTools.Field(typeof(ZNetScene), "m_namedPrefabs").GetValue(scene);
-            foreach (Def def in Defs)
+            foreach (ItemDef def in ItemCatalog.All)
             {
                 GameObject prefab = ObjectDB.instance.m_items.FirstOrDefault(i => i != null && i.name == def.Id);
                 if (prefab == null) continue;
@@ -91,7 +73,7 @@ namespace ValOutcast
         public static void GiveStartItems(Player player)
         {
             if (player == null || player.GetInventory() == null) return;
-            foreach (Def def in Defs.Where(d => d.GiveAtStart))
+            foreach (ItemDef def in ItemCatalog.All.Where(d => d.GiveAtStart))
             {
                 string key = GivenKeyPrefix + def.Id;
                 if (player.m_customData.ContainsKey(key)) continue;
@@ -110,19 +92,19 @@ namespace ValOutcast
         public static uint OwnedWeapons(Player player)
         {
             if (player == null || player.GetInventory() == null) return 0;
-            if (ObjectDB.instance != null && !ObjectDB.instance.m_items.Any(i => i != null && i.name == Defs[0].Id)) Register(ObjectDB.instance);
+            if (ObjectDB.instance != null && !ObjectDB.instance.m_items.Any(i => i != null && i.name == ItemCatalog.All[0].Id)) Register(ObjectDB.instance);
             if (ZNetScene.instance != null) RegisterPrefabs(ZNetScene.instance);
             GiveStartItems(player);
             uint mask = 0;
             foreach (ItemDrop.ItemData item in player.GetInventory().GetAllItems())
             {
-                Def def = Defs.FirstOrDefault(d => d.Weapon > 0 && item.m_dropPrefab != null && item.m_dropPrefab.name == d.Id);
+                ItemDef def = ItemCatalog.All.FirstOrDefault(d => d.Weapon > 0 && item.m_dropPrefab != null && item.m_dropPrefab.name == d.Id);
                 if (def != null) mask |= 1u << def.Weapon;
             }
             return mask;
         }
 
-        private static GameObject Make(GameObject template, Def def)
+        private static GameObject Make(GameObject template, ItemDef def)
         {
             GameObject go = UnityEngine.Object.Instantiate(template, _holder.transform);
             go.name = def.Id;
@@ -139,7 +121,7 @@ namespace ValOutcast
             return go;
         }
 
-        private static Recipe MakeRecipe(ObjectDB db, ItemDrop result, Def def)
+        private static Recipe MakeRecipe(ObjectDB db, ItemDrop result, ItemDef def)
         {
             CraftingStation station = db.m_recipes
                 .Where(r => r != null && r.m_craftingStation != null && r.m_craftingStation.name == def.Station)

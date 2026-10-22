@@ -2,17 +2,7 @@
 
 The world side. BepInEx + Harmony plugin (C#). `docs/PLAN.md` has the architecture; `docs/worlds/valheim.md` has the per-file roles.
 
-- `src/Plugin.cs`: entry point, config, the per-frame order of everything.
-- `../common/VoLink.cs`: the connection code (no Unity types, so it can be tested alone), shared with other worlds.
-- `src/Overlay.cs`, `../common/FrameReader.cs`: Outcast's picture (request, wait, draw).
-- `src/PlayerFollow.cs`: moves the Valheim player and camera to match Outcast; blocks Valheim's own input while Outcast drives.
-- `src/InputForwarder.cs`: keys and mouse to Outcast; what counts as "a menu is open".
-- `src/TerrainStreamer.cs`, `Combat.cs`, `WorldHits.cs`: ground and objects out, creatures out and hits in, hits on trees and rocks.
-- `src/Interactor.cs`, `ToolMode.cs`, `HeldItemView.cs`, `HudHider.cs`: the Use key, tool mode (R), the held-item view, the hotbar.
-- `src/OutcastItems.cs`, `Loadout.cs`: Outcast weapons as craftable Valheim items (icons in `assets/icons`), and the list of owned ones sent to Outcast.
-- `src/CheatCode.cs`: the `valleyofthejedi` chat cheat.
-- `src/SaberGlow.cs`: blue light while the lightsaber is lit.
-- `src/WorldLight.cs`, `PerfStats.cs`, `TestSpawner.cs`: light to Outcast, timing log, F8 boar.
+Source is in `src/`, grouped by job (`Input/`, `Player/`, `Collision/`, `Combat/`, `Lighting/`, `Overlay/`, `Items/`, `Config/`, `Debug/`). `docs/worlds/valheim.md` lists the files. Connection code shared with other worlds is in `../common/`. Valheim-specific numbers are in `src/Config/Tuning.cs`, and the item list is `src/Items/ItemCatalog.cs`.
 
 Build with `dotnet build`. It copies itself into Valheim's `BepInEx/plugins/ValOutcast`.
 Valheim must be started with the Steam launch option `./start_game_bepinex.sh %command%`.

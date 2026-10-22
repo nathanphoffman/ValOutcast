@@ -9,11 +9,7 @@ namespace ValOutcast
     /// </summary>
     public class CreatureStreamer
     {
-        private const float Range = 40f;
         private const float SendInterval = 0.1f;
-        /// <summary>Outcast damage points to Valheim damage points.</summary>
-        private const float OutcastToValheim = 1f;
-        private const float PushForce = 20f;
 
         private readonly Dictionary<uint, Character> _byId = new Dictionary<uint, Character>();
         private readonly HashSet<uint> _sentNow = new HashSet<uint>();
@@ -52,7 +48,7 @@ namespace ValOutcast
             foreach (Character c in Character.GetAllCharacters())
             {
                 if (c == null || c.IsPlayer() || c.IsDead()) continue;
-                if ((c.transform.position - center).sqrMagnitude > Range * Range) continue;
+                if ((c.transform.position - center).sqrMagnitude > Tuning.CreatureRange * Tuning.CreatureRange) continue;
 
                 uint id = (uint)c.GetInstanceID();
                 seen.Add(id);
@@ -93,10 +89,10 @@ namespace ValOutcast
                 }
 
                 var hit = new HitData();
-                hit.m_damage.m_slash = msg.Damage * OutcastToValheim;
+                hit.m_damage.m_slash = msg.Damage * Tuning.PlayerDamageToValheim;
                 hit.m_point = target.GetCenterPoint();
                 hit.m_dir = new Vector3(msg.DirX, msg.DirY, -msg.DirZ).normalized; // wire to Unity: flip Z
-                hit.m_pushForce = PushForce;
+                hit.m_pushForce = Tuning.CreaturePushForce;
                 hit.m_attacker = player.GetZDOID();
                 float before = target.GetHealth();
                 target.Damage(hit);
@@ -113,8 +109,6 @@ namespace ValOutcast
     [HarmonyPatch(typeof(Character), "RPC_Damage")]
     internal static class PlayerDamagePatch
     {
-        /// <summary>Right after the two games line up, damage is ignored: Valheim may still be settling the player.</summary>
-        private const float GraceSeconds = 3f;
 
         // Only attacks and harmful effects from creatures are passed on. Falls, drowning, the edge of the world and
         // so on are Valheim's own business: the other game moves the player, so they would be wrong.
@@ -140,7 +134,7 @@ namespace ValOutcast
             if (__instance != Player.m_localPlayer || !PlayerFollow.Active || Plugin.Link == null) return true;
 
             float damage = hit.GetTotalDamage();
-            bool grace = Time.unscaledTime - PlayerFollow.AnchoredAt < GraceSeconds;
+            bool grace = Time.unscaledTime - PlayerFollow.AnchoredAt < Tuning.HurtGraceSeconds;
             if (grace || !Passes(hit.m_hitType))
             {
                 Plugin.LogMessage("damage ignored: " + damage.ToString("0") + " (" + hit.m_hitType + (grace ? ", just started" : "") + ")");
