@@ -16,22 +16,22 @@ Each Valheim frame: read messages, send input, bump the request counter in the f
 
 ## Layout
 
-Target layout (see "Restructure"). Current path in brackets where different.
+Layout after restructure phases 1-2 (`worlds/common/` and `tools/worlds/` are still to come).
 
 | Path | What |
 |---|---|
 | `protocol/` | Messages, frame file spec, C/Python connection code, `golden.txt` (exact bytes every implementation must produce). Shared by all games. |
-| `player/outcast/` [`outcast/`] | `src/` (`vo_bridge`, `vo_field`), `renderer/vo_overlay`, `patches/0001-bridge-hooks.patch` for OpenJK. |
+| `player/outcast/` | `src/` (`vo_bridge`, `vo_field`), `renderer/vo_overlay`, `patches/0001-bridge-hooks.patch` for OpenJK. |
 | `worlds/common/` (new) | C# code any C# world plugin can use: `VoLink.cs`, `FrameReader.cs`. |
-| `worlds/valheim/` [`valheim/`] | Valheim plugin (C#, BepInEx 5 + Harmony). `Plugin.cs` calls each part per frame; a part that throws switches itself off. |
+| `worlds/valheim/` | Valheim plugin (C#, BepInEx 5 + Harmony). `Plugin.cs` calls each part per frame; a part that throws switches itself off. |
 | `tools/` | Tests, fake games, run scripts. Valheim-only tools go in `tools/worlds/valheim/`. |
 | `third_party/` | Not in git. `OpenJK/` (our modified checkout), `jk2run/` (links to the build and the Steam game files). |
 | `docs/` | This file. Per-game notes in `docs/worlds/<game>.md`. |
 | `todo.md` | The user's own notes. Do not edit. |
 
-**Valheim plugin parts** (`valheim/src/`): `InputForwarder` (keys, mouse, menus), `PlayerFollow` (moves player and camera), `TerrainStreamer` (0.5 m ground columns in 8 m chunks), `Combat` (creatures out, hits in, damage to player), `WorldHits` (trees/rocks), `Interactor` (E key), `ToolMode` + `HeldItemView` (R key, Valheim's own items), `OutcastItems` + `Loadout` (weapons as craftable items, weapon limit), `CheatCode` (`valleyofthejedi`), `SaberGlow`, `WorldLight`, `Overlay`, `HudHider`, `PerfStats`, `TestSpawner` (F8 boar).
+**Valheim plugin parts** (`worlds/valheim/src/`): `InputForwarder` (keys, mouse, menus), `PlayerFollow` (moves player and camera), `TerrainStreamer` (0.5 m ground columns in 8 m chunks), `Combat` (creatures out, hits in, damage to player), `WorldHits` (trees/rocks), `Interactor` (E key), `ToolMode` + `HeldItemView` (R key, Valheim's own items), `OutcastItems` + `Loadout` (weapons as craftable items, weapon limit), `CheatCode` (`valleyofthejedi`), `SaberGlow`, `WorldLight`, `Overlay`, `HudHider`, `PerfStats`, `TestSpawner` (F8 boar).
 
-**OpenJK patch workflow:** edit in `third_party/OpenJK`, regenerate with `cd third_party/OpenJK && git diff > ../../outcast/patches/0001-bridge-hooks.patch`. Files we add (`vo_bridge.*`, `vo_field.*`, `vo_link.*`, `vo_overlay.*`) are edited in this repo and copied in by `tools/apply_outcast.sh`. Run it before every build. Never edit those copies under `third_party/`.
+**OpenJK patch workflow:** edit in `third_party/OpenJK`, regenerate with `cd third_party/OpenJK && git diff > ../../player/outcast/patches/0001-bridge-hooks.patch`. Files we add (`vo_bridge.*`, `vo_field.*`, `vo_link.*`, `vo_overlay.*`) are edited in this repo and copied in by `tools/apply_outcast.sh`. Run it before every build. Never edit those copies under `third_party/`.
 
 ## Build, run, test
 
@@ -97,11 +97,11 @@ All original phases (setup, connection, player sync, terrain collision, creature
 6. Crafted weapons: remaining 11 items (icons are `gfx/hud/w_icon_*.tga` in Outcast's pk3s), ammo items, ammo counter following the Valheim stack. No Jotunn; register items with our own Harmony patches. Unlock order (first guess): stun baton at start, bryar pistol Meadows, E-11 Black Forest, bowcaster Swamp, repeater Mountain, flechette Plains, lightsaber Mistlands, rocket launcher Ashlands, the rest Deep North.
 7. Lightsaber first-person view, saving Outcast state in `Player.m_customData`, weather, save syncing, multiplayer (long term), release polish (installer, Windows).
 
-## Restructure (decided 2026-10-22, not done yet)
+## Restructure (decided 2026-10-22; phases 1-2 done: folders moved, paths fixed, tests pass; the rest is not done)
 
 Goal: the player side may change games and the world side will change games; neither should need a rewrite of the shared parts.
 
-1. `outcast/` becomes `player/outcast/`; `valheim/` becomes `worlds/valheim/`.
+1. DONE: `outcast/` is now `player/outcast/`; `valheim/` is now `worlds/valheim/`.
 2. Move `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/vo_link.c`.
 3. Valheim-only tools go to `tools/worlds/valheim/`; per-game notes to `docs/worlds/valheim.md`.
 4. Every world plugin does the same jobs with the same file names: Input, Collision, Actors, Combat, Lighting, Overlay. A new game starts as a copy.

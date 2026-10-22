@@ -14,6 +14,6 @@ tools/apply_outcast.sh
 cd third_party/OpenJK/buildjo && make -j$(nproc)
 ```
 
-`tools/apply_outcast.sh` copies the files above into `third_party/OpenJK` and applies the patch. To change OpenJK's own files, edit them in `third_party/OpenJK`, then regenerate the patch: `cd third_party/OpenJK && git diff > ../../outcast/patches/0001-bridge-hooks.patch`. Edit our added files (`src/`, `renderer/`, `protocol/vo_link.*`) here, not the copies in `third_party/`.
+`tools/apply_outcast.sh` copies the files above into `third_party/OpenJK` and applies the patch. To change OpenJK's own files, edit them in `third_party/OpenJK`, then regenerate the patch: `cd third_party/OpenJK && git diff > ../../player/outcast/patches/0001-bridge-hooks.patch`. Edit our added files (`src/`, `renderer/`, `protocol/vo_link.*`) here, not the copies in `third_party/`.
 
 Look for `ValOutcast:` lines in the game's console output. Run it with `tools/run_outcast.sh` (see the main README and `docs/PLAN.md` for the environment switches).

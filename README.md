@@ -13,8 +13,8 @@ Each game runs normally. A small plugin in each one passes messages to the other
 
 | Folder | What it is |
 |---|---|
-| `valheim/` | Valheim plugin (C#, BepInEx + Harmony) |
-| `outcast/` | Jedi Outcast side: our code (`src/`, `renderer/`) and a patch for OpenJK (`patches/`) |
+| `worlds/valheim/` | Valheim plugin (C#, BepInEx + Harmony) |
+| `player/outcast/` | Jedi Outcast side: our code (`src/`, `renderer/`) and a patch for OpenJK (`patches/`) |
 | `protocol/` | The messages between the two games, plus the C and Python versions of the connection code |
 | `tools/` | Tests, fake games, helper scripts |
 | `docs/` | Plan and design notes |
@@ -29,7 +29,7 @@ Each game runs normally. A small plugin in each one passes messages to the other
 
 ```
 # Valheim plugin (also copies it into Valheim's BepInEx/plugins)
-cd valheim && dotnet build
+cd worlds/valheim && dotnet build
 
 # Outcast: OpenJK plus our bridge
 git clone https://github.com/JACoders/OpenJK third_party/OpenJK
