@@ -10,6 +10,7 @@ Options: --walk   send Input (walk forward, slowly turning) as if the Valheim wi
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
          --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting (14 = the cheat: everything)
+         --item   add a loose item 2 m ahead of the start (push or pull it with --power 1 or 2)
          --power N  press ability N (1 to 7: push, pull, speed, mind trick, heal, grip, lightning) for 1 s every 4 s, from 6 s on
          --dark   send a dim, bluish world light (night) instead of bright daylight
          --nowall leave out the ring wall (flat ground all around)
@@ -33,6 +34,7 @@ RADIUS_CHUNKS = 5
 WALK = "--walk" in sys.argv
 TURN = "--turn" in sys.argv
 NOACTORS = "--noactors" in sys.argv
+ITEM = "--item" in sys.argv
 NEAR = "--near" in sys.argv
 TURN_RATE = float(sys.argv[sys.argv.index("--turnrate") + 1]) if "--turnrate" in sys.argv else 0.5
 NOWALL = "--nowall" in sys.argv
@@ -69,6 +71,8 @@ def send_field(link, ax, ay, az):
 
 def send_actors(link, ax, ay, az, t):
     """Two creatures wandering in small circles near the start."""
+    if ITEM:
+        link.send_raw(lambda seq: vo.encode_actor_upsert(seq, 200, (ax, ay, az + 2.0), 0.2, 0.4, 255, vo.ACTOR_LOOSE))
     if NOACTORS:
         return
     for n, (dx, dz) in enumerate(((1.2, -0.9), (-1.2, 1.0)) if NEAR else ((3.0, -2.0), (-3.0, 2.5))):
@@ -144,6 +148,8 @@ try:
         for kind, value in link.inbox:
             if kind == vo.MSG_HIT_ACTOR:
                 print("[fake_world] HitActor id=%d damage=%.0f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
+            if kind == vo.MSG_ACTOR_PUSH:
+                print("[fake_world] ActorPush id=%d strength=%.2f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
             if kind == vo.MSG_HIT_WORLD:
                 print("[fake_world] HitWorld kind=%d damage=%.0f at (%.2f, %.2f, %.2f)" % (value[3], value[2], *value[0]), flush=True)
         link.inbox.clear()

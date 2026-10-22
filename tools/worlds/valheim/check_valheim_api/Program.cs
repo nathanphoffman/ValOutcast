@@ -53,6 +53,7 @@ class Program
         // Harmony patches
         Method("Player", "OnSpawned"); Method("Chat", "SendText");
         Method("ObjectDB", "Awake"); Method("ObjectDB", "CopyOtherDB"); Method("ObjectDB", "UpdateRegisters"); Method("ZNetScene", "Awake");
+        Field("ItemDrop", "s_instances"); Field("ItemDrop", "m_nview");
         Field("ObjectDB", "m_items"); Field("ObjectDB", "m_recipes"); Field("ZNetScene", "m_namedPrefabs"); Field("Player", "m_customData");
         Method("Player", "FixedUpdate", 0);
         Method("Player", "TakeInput", 0);
@@ -104,6 +105,7 @@ class Program
         // Input and menus
         Method("ZInput", "GetButton", 1);
         Method("ZInput", "GetKey", 2);
+        Method("Character", "ApplyPushback", 2);
         Method("ZInput", "GetMouseDelta", 0);
         Method("ZInput", "IsMouseActive", 0);
         Field("PlayerController", "m_mouseSens", "Single");

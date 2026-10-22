@@ -20,6 +20,7 @@ MSG_WORLD_CONTEXT = 11
 MSG_HIT_WORLD = 12
 MSG_PLAYER_LIGHT = 13
 MSG_LOADOUT = 14
+MSG_ACTOR_PUSH = 15
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -30,6 +31,7 @@ def button_ability(n):
     """Button bit of ability n (1 to 7): bits 3 to 9."""
     return 8 << (n - 1)
 ACTOR_HOSTILE = 1
+ACTOR_LOOSE = 2
 CHUNK_CELLS = 16
 CELL_SIZE_M = 0.5
 HEIGHT_UNITS_PER_M = 32
@@ -111,6 +113,15 @@ def decode_hit_actor(payload):
         return None
     v = struct.unpack_from("<I4f", payload)
     return v[0], v[1], v[2:5]
+
+
+def encode_actor_push(seq, actor_id, strength, direction):
+    return _HEADER.pack(MAGIC, VERSION, MSG_ACTOR_PUSH, seq) + struct.pack("<I4f", actor_id, strength, *direction)
+
+
+def decode_actor_push(payload):
+    """Return (id, strength, direction) or None."""
+    return decode_hit_actor(payload)
 
 
 def encode_hit_world(seq, position, direction, damage, kind):
@@ -268,7 +279,7 @@ class Link:
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
                 MSG_HIT_ACTOR: decode_hit_actor, MSG_HIT_WORLD: decode_hit_world, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
-                MSG_PLAYER_LIGHT: decode_player_light, MSG_LOADOUT: decode_loadout,
+                MSG_PLAYER_LIGHT: decode_player_light, MSG_ACTOR_PUSH: decode_actor_push, MSG_LOADOUT: decode_loadout,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

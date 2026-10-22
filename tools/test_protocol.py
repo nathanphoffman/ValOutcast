@@ -39,6 +39,8 @@ assert vo.decode_actor_upsert(golden["actor_upsert"][8:]) == (7, (1.0, 2.0, 3.0)
 assert vo.encode_actor_remove(7, 7) == golden["actor_remove"] and vo.decode_actor_remove(golden["actor_remove"][8:]) == 7
 assert vo.encode_hit_actor(8, 7, 25.0, (0, 0, -1)) == golden["hit_actor"]
 assert vo.decode_hit_actor(golden["hit_actor"][8:]) == (7, 25.0, (0.0, 0.0, -1.0))
+assert vo.encode_actor_push(15, 7, 0.5, (0, 0, -1)) == golden["actor_push"]
+assert vo.decode_actor_push(golden["actor_push"][8:]) == (7, 0.5, (0.0, 0.0, -1.0))
 assert vo.encode_player_hurt(9, 10.0, (1, 0, 0), 42) == golden["player_hurt"]
 assert vo.decode_player_hurt(golden["player_hurt"][8:]) == (10.0, (1.0, 0.0, 0.0), 42)
 assert vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5, 4) == golden["input"]

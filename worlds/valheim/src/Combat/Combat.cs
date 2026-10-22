@@ -6,12 +6,21 @@ namespace ValOutcast
 {
     /// <summary>
     /// Creatures: sends the nearby ones to the player side (as boxes it can hit), and applies the hits it reports.
+    /// Also sends loose items lying on the ground, which force push and pull can move.
     /// </summary>
     public class CreatureStreamer
     {
         private const float SendInterval = 0.1f;
 
         private readonly Dictionary<uint, Character> _byId = new Dictionary<uint, Character>();
+        private readonly Dictionary<uint, ItemDrop> _items = new Dictionary<uint, ItemDrop>();
+        private static readonly System.Reflection.FieldInfo ItemInstancesField = AccessTools.Field(typeof(ItemDrop), "s_instances");
+        private static readonly AccessTools.FieldRef<ItemDrop, ZNetView> ItemView = AccessTools.FieldRefAccess<ItemDrop, ZNetView>("m_nview");
+
+        private static List<ItemDrop> ItemInstances()
+        {
+            return ItemInstancesField.GetValue(null) as List<ItemDrop> ?? new List<ItemDrop>();
+        }
         private readonly HashSet<uint> _sentNow = new HashSet<uint>();
         private readonly List<uint> _gone = new List<uint>();
         private float _nextSend;
@@ -26,8 +35,10 @@ namespace ValOutcast
             if (!on)
             {
                 _byId.Clear();
+                _items.Clear();
                 _sentNow.Clear();
                 link.HitActors.Clear();
+                link.ActorPushes.Clear();
                 return;
             }
 
@@ -63,6 +74,22 @@ namespace ValOutcast
                 link.SendActorUpsert(id, pos, radius, height, hp, flags);
             }
 
+            foreach (ItemDrop drop in ItemInstances())
+            {
+                if (drop == null || seen.Count >= Tuning.MaxActors) continue;
+                var body = drop.GetComponent<Rigidbody>();
+                if (body == null || body.isKinematic) continue;
+                if ((drop.transform.position - center).sqrMagnitude > Tuning.ItemRange * Tuning.ItemRange) continue;
+
+                uint id = (uint)drop.gameObject.GetInstanceID();
+                seen.Add(id);
+                _items[id] = drop;
+
+                Vector3 wire = PlayerFollow.WorldToWire(drop.transform.position);
+                pos[0] = wire.x; pos[1] = wire.y; pos[2] = wire.z;
+                link.SendActorUpsert(id, pos, 0.2f, 0.4f, 255, VoLink.ActorLoose);
+            }
+
             // Tell the player side about creatures that left range or died.
             _gone.Clear();
             foreach (uint id in _sentNow) if (!seen.Contains(id)) _gone.Add(id);
@@ -70,14 +97,42 @@ namespace ValOutcast
             {
                 link.SendActorRemove(id);
                 _byId.Remove(id);
+                _items.Remove(id);
             }
             _sentNow.Clear();
             foreach (uint id in seen) _sentNow.Add(id);
             _sentCount = seen.Count;
         }
 
+        /// <summary>Force push or pull on an item lying on the ground: a speed change plus a small hop, so it slides or rolls free.</summary>
+        private static void PushItem(ItemDrop drop, Vector3 dir, float strength)
+        {
+            var body = drop.GetComponent<Rigidbody>();
+            if (body == null) return;
+            ZNetView view = ItemView(drop);
+            if (view != null && view.IsValid() && !view.IsOwner()) view.ClaimOwnership();
+            body.WakeUp();
+            body.AddForce(dir * (Tuning.ItemPushSpeed * strength) + Vector3.up * (Tuning.ItemPushHop * strength), ForceMode.VelocityChange);
+            Plugin.LogMessage("force push on item " + drop.name + ", strength " + strength.ToString("0.00"));
+        }
+
         private void ApplyHits(VoLink link, Player player)
         {
+            // Force push and pull: the player side says which creatures it moved and which way.
+            while (link.ActorPushes.Count > 0)
+            {
+                VoLink.HitActorMsg push = link.ActorPushes.Dequeue();
+                var dir = new Vector3(push.DirX, push.DirY, -push.DirZ).normalized; // wire to Unity: flip Z
+                if (_items.TryGetValue(push.Id, out ItemDrop drop) && drop != null)
+                {
+                    PushItem(drop, dir, push.Damage);   // Damage holds the strength here
+                    continue;
+                }
+                if (!_byId.TryGetValue(push.Id, out Character mover) || mover == null || mover.IsDead()) continue;
+                mover.ApplyPushback(dir, Tuning.ForcePushForce * push.Damage);   // Damage holds the strength here
+                Plugin.LogMessage("force push on " + mover.m_name + ", strength " + push.Damage.ToString("0.00"));
+            }
+
             while (link.HitActors.Count > 0)
             {
                 VoLink.HitActorMsg msg = link.HitActors.Dequeue();

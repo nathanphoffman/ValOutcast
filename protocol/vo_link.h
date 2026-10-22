@@ -24,6 +24,7 @@ extern "C" {
 #define VO_MSG_HIT_WORLD 12
 #define VO_MSG_PLAYER_LIGHT 13
 #define VO_MSG_LOADOUT 14
+#define VO_MSG_ACTOR_PUSH 15
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -31,6 +32,7 @@ extern "C" {
 #define VO_BUTTON_ABILITY(n) (8u << ((n) - 1))
 #define VO_ABILITY_COUNT 7
 #define VO_ACTOR_HOSTILE 1
+#define VO_ACTOR_LOOSE 2   /* a loose object (an item on the ground): can be pushed and pulled, not hit, not solid */
 #define VO_CHUNK_CELLS 16
 #define VO_CELL_SIZE_M 0.5f
 #define VO_HEIGHT_UNITS_PER_M 32
@@ -111,6 +113,11 @@ int vo_encode_input(uint8_t *out, uint32_t seq, const vo_input *in);
 int vo_decode_input(const uint8_t *payload, int len, vo_input *in);
 int vo_encode_world_context(uint8_t *out, uint32_t seq, const vo_world *w);
 int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w);
+/* ActorPush: the player side moved a creature (a force push or pull). Same layout as HitActor: id, strength 0 to 1 (fraction of the
+ * player side's full push; the world side scales it), direction (unit vector, wire space) the creature should move. 28 bytes. */
+int vo_encode_actor_push(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
+void vo_link_send_actor_push(vo_link *link, uint32_t id, float strength, const float dir[3]);
+
 /* Sends a HitActor if connected. */
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);
 

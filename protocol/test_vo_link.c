@@ -91,6 +91,9 @@ int main(int argc, char **argv)
 		n = golden("hit_actor", want, 64);
 		check(n > 0 && vo_encode_hit_actor(got, 8, 7, 25.0f, dir) == n && memcmp(got, want, n) == 0, "hit_actor bytes");
 
+		n = golden("actor_push", want, 64);
+		check(n > 0 && vo_encode_actor_push(got, 15, 7, 0.5f, dir) == n && memcmp(got, want, n) == 0, "actor_push bytes");
+
 		{
 			const float wpos[3] = {1, 2, 3}, wdir[3] = {0, 0, -1};
 			n = golden("hit_world", want, 64);

@@ -11,6 +11,14 @@ namespace ValOutcast
         /// <summary>The player side's damage points to Valheim damage points.</summary>
         public const float PlayerDamageToValheim = 1f;
         public const float CreaturePushForce = 20f;
+        /// <summary>Valheim push force of a full strength force push or pull on a creature (a sword hit uses about 20-60). Tune this.</summary>
+        public const float ForcePushForce = 150f;
+        /// <summary>Items on the ground are sent to the player side so they can be pushed and pulled: how far (m), and the most sent at once.</summary>
+        public const float ItemRange = 18f;
+        public const int MaxActors = 48;
+        /// <summary>Speed (m/s) given to a loose item by a full strength push or pull, plus a small upward hop so it does not stick.</summary>
+        public const float ItemPushSpeed = 9f;
+        public const float ItemPushHop = 2.5f;
         /// <summary>Right after the two games line up, damage to the player is ignored: Valheim may still be settling it.</summary>
         public const float HurtGraceSeconds = 3f;
         /// <summary>Valheim tool tier of a blow on the world. 4 lets the lightsaber and the guns cut or break anything.</summary>

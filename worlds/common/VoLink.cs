@@ -20,6 +20,7 @@ namespace ValOutcast
         public const byte MsgActorUpsert = 6;
         public const byte MsgActorRemove = 7;
         public const byte MsgHitActor = 8;
+        public const byte MsgActorPush = 15;
         public const byte MsgHitWorld = 12;
         public const byte MsgPlayerHurt = 9;
         public const byte MsgInput = 10;
@@ -33,6 +34,7 @@ namespace ValOutcast
         /// <summary>Button bit of ability n (1 to 7): bits 3 to 9.</summary>
         public static uint ButtonAbility(int n) { return 8u << (n - 1); }
         public const byte ActorHostile = 1;
+        public const byte ActorLoose = 2;
         public const int ChunkCells = 16;
         public const float CellSizeM = 0.5f;
         public const int HeightUnitsPerM = 32;
@@ -56,6 +58,9 @@ namespace ValOutcast
         }
 
         public readonly Queue<HitActorMsg> HitActors = new Queue<HitActorMsg>();
+
+        /// <summary>The player side pushed or pulled a creature (a force push). Damage holds the strength, 0 to 1; Dir is where the creature should move.</summary>
+        public readonly Queue<HitActorMsg> ActorPushes = new Queue<HitActorMsg>();
 
         /// <summary>The player side hit the world itself (a tree, a rock, the ground) rather than a creature. Positions are wire space.</summary>
         public struct HitWorldMsg
@@ -197,6 +202,13 @@ namespace ValOutcast
             BitConverter.GetBytes(id).CopyTo(b, 8);
             BitConverter.GetBytes(damage).CopyTo(b, 12);
             for (int i = 0; i < 3; i++) BitConverter.GetBytes(dir[i]).CopyTo(b, 16 + 4 * i);
+            return b;
+        }
+
+        public static byte[] EncodeActorPush(uint seq, uint id, float strength, float[] dir)
+        {
+            byte[] b = EncodeHitActor(seq, id, strength, dir);
+            b[3] = MsgActorPush;
             return b;
         }
 
@@ -394,6 +406,10 @@ namespace ValOutcast
                 if (type == MsgHitActor && DecodeHitActor(_recvBuf, n, out HitActorMsg hit))
                 {
                     if (HitActors.Count < 256) HitActors.Enqueue(hit);
+                }
+                if (type == MsgActorPush && DecodeHitActor(_recvBuf, n, out HitActorMsg push))
+                {
+                    if (ActorPushes.Count < 256) ActorPushes.Enqueue(push);
                 }
                 if (type == MsgHitWorld && DecodeHitWorld(_recvBuf, n, out HitWorldMsg hitWorld))
                 {

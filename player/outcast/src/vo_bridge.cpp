@@ -43,6 +43,7 @@ struct Proxy {
 	uint32_t id;
 	gentity_t *ent;
 	int lastSeenMs;
+	qboolean loose;   // an item on the ground, see VO_ACTOR_LOOSE
 };
 static Proxy s_proxies[64];
 static int s_proxyCount = 0;
@@ -113,9 +114,7 @@ static void VO_UpsertActor(const vo_actor *a)
 		if (!ent) return;
 		ent->classname = "vo_actor";
 		ent->svFlags = SVF_NOCLIENT;          // invisible: Valheim draws the creature
-		ent->contents = CONTENTS_BODY;        // the player can walk into it and hit it
 		ent->clipmask = 0;
-		ent->takedamage = qtrue;
 		ent->health = ent->max_health = PROXY_HEALTH;
 		ent->e_ThinkFunc = thinkF_NULL;
 		ent->nextthink = 0;
@@ -125,6 +124,12 @@ static void VO_UpsertActor(const vo_actor *a)
 	}
 	Proxy &p = s_proxies[i];
 	p.lastSeenMs = (int)VO_NowMs();
+	// A creature is a solid box the player can walk into and hit. A loose object (an item on the ground) is neither: it only
+	// takes part in force push and pull.
+	const qboolean loose = (a->flags & VO_ACTOR_LOOSE) ? qtrue : qfalse;
+	p.loose = loose;
+	p.ent->contents = loose ? 0 : CONTENTS_BODY;
+	p.ent->takedamage = loose ? qfalse : qtrue;
 
 	const float half = a->radius * UNITS_PER_METER;
 	VectorSet(p.ent->mins, -half, -half, 0.0f);
@@ -162,6 +167,59 @@ static void VO_SendProxyHits(const gentity_t *player)
 		VO_ToWire(toActor, wire, 1.0f);
 		if (getenv("VO_DEBUG_BOLTS")) gi.Printf("ValOutcast: hit creature %u for %d\n", (unsigned)s_proxies[i].id, damage);
 		vo_link_send_hit_actor(&s_link, s_proxies[i].id, (float)damage, wire);
+	}
+}
+
+extern float forcePushPullRadius[];
+extern float forcePushCone[];
+extern float forcePullCone[];
+extern int forcePowerNeeded[];
+
+// A force push or pull. The game's own ForceThrow skips our invisible creature boxes, and Valheim decides where creatures are
+// anyway, so the creatures in range are reported (ActorPush) and Valheim moves them. Range and cone are Outcast's own.
+static void VO_ForcePushProxies(gentity_t *player, qboolean pull)
+{
+	playerState_t *ps = &player->client->ps;
+	const forcePowers_t power = pull ? FP_PULL : FP_PUSH;
+	const int powerLevel = ps->forcePowerLevel[power];
+	if (!(ps->forcePowersKnown & (1 << power)) || powerLevel <= 0 || (ps->forcePowersActive & (1 << power))) return;
+	if (ps->forcePower < forcePowerNeeded[power] || ps->forcePowerDebounce[FP_PUSH] > level.time) {
+		if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: force push/pull not ready (pool %d, need %d)\n", ps->forcePower, forcePowerNeeded[power]);
+		return;
+	}
+
+	const float radius = forcePushPullRadius[powerLevel];
+	float cone = pull ? forcePullCone[powerLevel] : forcePushCone[powerLevel];
+	if (cone > 0.94f) cone = 0.94f;   // 1.0 means "the one you look at"; allow a few degrees
+
+	vec3_t angles, forward, eye;
+	VectorCopy(ps->viewangles, angles);
+	AngleVectors(angles, forward, NULL, NULL);
+	VectorCopy(player->currentOrigin, eye);
+	eye[2] += ps->viewheight;
+
+	for (int i = 0; i < s_proxyCount; i++) {
+		gentity_t *ent = s_proxies[i].ent;
+		vec3_t center, to;
+		VectorCopy(ent->currentOrigin, center);
+		center[2] += ent->maxs[2] * 0.5f;
+		VectorSubtract(center, eye, to);
+		const float dist = VectorNormalize(to);
+		if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: force candidate %u at %.0f units, facing %.2f (needs %.2f, radius %.0f)\n", (unsigned)s_proxies[i].id, dist, DotProduct(to, forward), cone, radius);
+		if (dist > radius || dist < 1.0f) continue;
+		// Items lie on the floor, below where you aim, so they get a wide cone (about 60 degrees).
+		if (DotProduct(to, forward) < (s_proxies[i].loose ? fminf(cone, 0.5f) : cone)) continue;
+
+		vec3_t flat;
+		VectorSubtract(ent->currentOrigin, player->currentOrigin, flat);
+		flat[2] = 0.0f;
+		VectorNormalize(flat);
+		if (pull) VectorScale(flat, -1.0f, flat);
+		float wire[3];
+		VO_ToWire(flat, wire, 1.0f);
+		const float strength = 1.0f - 0.6f * (dist / radius);
+		if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: force %s creature %u strength %.2f\n", pull ? "pull" : "push", (unsigned)s_proxies[i].id, strength);
+		vo_link_send_actor_push(&s_link, s_proxies[i].id, strength, wire);
 	}
 }
 
@@ -358,7 +416,9 @@ void VO_Frame(void)
 		}
 		if (s_active) {
 			for (int n = 1; n <= 5; n++) {
-				if (pressed & VO_BUTTON_ABILITY(n)) gi.SendConsoleCommand(instantCmd[n - 1]);
+				if (!(pressed & VO_BUTTON_ABILITY(n))) continue;
+				gi.SendConsoleCommand(instantCmd[n - 1]);
+				if (n == 1 || n == 2) VO_ForcePushProxies(ent, n == 2 ? qtrue : qfalse);
 			}
 		}
 	}

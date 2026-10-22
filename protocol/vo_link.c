@@ -157,6 +157,13 @@ int vo_encode_hit_actor(uint8_t *out, uint32_t seq, uint32_t id, float damage, c
 	return 28;
 }
 
+int vo_encode_actor_push(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3])
+{
+	int n = vo_encode_hit_actor(out, seq, id, strength, dir);
+	out[3] = VO_MSG_ACTOR_PUSH;
+	return n;
+}
+
 int vo_encode_hit_world(uint8_t *out, uint32_t seq, const float pos[3], const float dir[3], float damage, int kind)
 {
 	int i;
@@ -314,6 +321,15 @@ void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const floa
 	int n;
 	if (link->sock < 0 || !link->connected) return;
 	n = vo_encode_hit_actor(buf, ++link->seq, id, damage, dir);
+	send_to_peer(link, buf, n);
+}
+
+void vo_link_send_actor_push(vo_link *link, uint32_t id, float strength, const float dir[3])
+{
+	uint8_t buf[28];
+	int n;
+	if (link->sock < 0 || !link->connected) return;
+	n = vo_encode_actor_push(buf, ++link->seq, id, strength, dir);
 	send_to_peer(link, buf, n);
 }
 
