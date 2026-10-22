@@ -33,8 +33,10 @@ namespace ValOutcast
         /// <summary>Call every frame.</summary>
         public void Update()
         {
-            // Only while playing: not on the title screen or while loading (no player yet), and not while Valheim's own menu is open.
-            if (!PlayerFollow.Active || Player.m_localPlayer == null || Menu.IsVisible())
+            // Only while playing: not on the title screen or while loading (no player yet), and not while a Valheim menu is open
+            // (the inventory, a chest, crafting, a trader, the hammer's menu): Outcast's picture would be drawn over it.
+            if (!PlayerFollow.Active || Player.m_localPlayer == null || Menu.IsVisible()
+                || InventoryGui.IsVisible() || StoreGui.IsVisible() || Hud.IsPieceSelectionVisible() || TextInput.IsVisible())
             {
                 _show = false;
                 PlayerFollow.Lockstep = false;

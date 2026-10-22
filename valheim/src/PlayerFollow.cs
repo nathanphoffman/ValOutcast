@@ -226,16 +226,6 @@ namespace ValOutcast
         }
     }
 
-    /// <summary>The inventory screen would only get in the way while another game drives.</summary>
-    [HarmonyPatch(typeof(InventoryGui), "Show")]
-    internal static class InventoryShowPatch
-    {
-        private static bool Prefix()
-        {
-            return !PlayerFollow.Active;
-        }
-    }
-
     /// <summary>Ignore the keyboard and mouse while another game drives the player.</summary>
     [HarmonyPatch(typeof(PlayerController), "TakeInput")]
     internal static class PlayerControllerTakeInputPatch

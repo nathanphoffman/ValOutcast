@@ -4,7 +4,8 @@ namespace ValOutcast
 {
     /// <summary>
     /// Sends what you do at the Valheim keyboard and mouse to the player side (Outcast), which does the moving.
-    /// Stops while any Valheim menu, chat or console is open.
+    /// Stops while any Valheim menu, chat or console is open: Outcast stands still and does not turn, and Valheim has the mouse
+    /// cursor (its menus handle that themselves). That is what makes the inventory, chests, crafting and the hammer's menu usable.
     /// </summary>
     public class InputForwarder
     {
@@ -32,6 +33,7 @@ namespace ValOutcast
                 || (Chat.instance != null && Chat.instance.HasFocus())
                 || InventoryGui.IsVisible()
                 || StoreGui.IsVisible()
+                || Hud.IsPieceSelectionVisible()
                 || Minimap.IsOpen();
         }
 

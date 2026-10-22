@@ -21,8 +21,13 @@ namespace ValOutcast
                 if (Time.unscaledTime >= _nextScan)
                 {
                     _nextScan = Time.unscaledTime + ScanSeconds;
-                    _bars.Clear();
-                    _bars.AddRange(Object.FindObjectsOfType<HotkeyBar>());
+                    // FindObjectsOfType does not return objects that are switched off, which is what the bars are after the first
+                    // hide, so new ones are added to the list and the list is never emptied (or they could not be switched back on).
+                    _bars.RemoveAll(b => b == null);
+                    foreach (HotkeyBar bar in Object.FindObjectsOfType<HotkeyBar>())
+                    {
+                        if (!_bars.Contains(bar)) _bars.Add(bar);
+                    }
                 }
                 foreach (HotkeyBar bar in _bars)
                 {
