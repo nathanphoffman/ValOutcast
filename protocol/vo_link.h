@@ -112,7 +112,7 @@ int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w);
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);
 
 /* HitWorld: the player side hit the world itself (not a creature) at pos (meters), blow direction dir (unit vector), with damage
- * in its own points. kind: 0 = shot, 1 = lightsaber. 40 bytes. */
+ * in its own points. kind: 0 = ranged attack (a shot), 1 = melee attack (a blade swing). 40 bytes. */
 int vo_encode_hit_world(uint8_t *out, uint32_t seq, const float pos[3], const float dir[3], float damage, int kind);
 void vo_link_send_hit_world(vo_link *link, const float pos[3], const float dir[3], float damage, int kind);
 /* PlayerLight: a light the player carries (for example a lit lightsaber). color 0..1 per channel, intensity 0 = off. 24 bytes. */

@@ -37,9 +37,9 @@ Packets with the wrong magic or version, or too short, are dropped silently.
 | 9 | PlayerHurt | f32 damage (the world side's own damage points), 3 x f32 direction the blow travels (unit vector, wire space), u32 source id (0 = unknown). 20 bytes. World side to player side. |
 | 10 | Input | u32 buttons, f32 forward, f32 right, f32 up (each -1..1), f32 look yaw change, f32 look pitch change (degrees since last packet; positive yaw turns left, positive pitch looks up), i32 weapon request. 28 bytes. World side to player side. |
 | 11 | WorldContext | 9 x f32: direction toward the sun (unit vector, wire space), sun color x3 (brightness already applied, about 0 to 1.5), ambient light color x3 (0 to 1). 36 bytes. World side to player side, about 4 times a second. The player side uses it to light its models the way the world is lit. |
-| 12 | HitWorld | 3 x f32 position (meters), 3 x f32 direction of the blow (unit vector), f32 damage (the player side's own damage points), u8 kind (0 = shot, 1 = lightsaber), 3 bytes zero. 32 bytes. Player side to world side. Sent when a shot or a lightsaber swing hits the world itself (not a creature), so the world side can damage whatever stands there (trees, rocks). |
+| 12 | HitWorld | 3 x f32 position (meters), 3 x f32 direction of the blow (unit vector), f32 damage (the player side's own damage points), u8 kind (0 = ranged attack such as a shot, 1 = melee attack such as a blade swing; the world side may use it to pick damage types or effects), 3 bytes zero. 32 bytes. Player side to world side. Sent when a ranged or melee attack hits the world itself (not a creature), so the world side can damage whatever stands there (trees, rocks). |
 | 13 | PlayerLight | 3 x f32 color (0 to 1), f32 intensity (0 = off). 24 bytes. Player side to world side, sent when it changes and twice a second. A light the player carries (a lit lightsaber today); the world side shows it as a light around the player and turns it off if the packets stop. |
-| 14 | Loadout | u32 bit mask: the weapons the player owns (bit n = the player side's weapon number n; for Outcast 1 saber, 2 bryar pistol ... 13 stun baton). 12 bytes. World side to player side, about 4 times a second. The player side limits the player to these weapons; until the first Loadout arrives (or after the cheat code) it does not limit anything. |
+| 14 | Loadout | u32 bit mask: the weapons the player owns (bit n = the player side's weapon number n; for Outcast 1 saber, 2 bryar pistol ... 13 stun baton). The weapon numbers belong to the player side; the world side keeps its own table from its items to those numbers (Valheim: `worlds/valheim/src/Items/ItemCatalog.cs`). 12 bytes. World side to player side, about 4 times a second. The player side limits the player to these weapons; until the first Loadout arrives (or after the cheat code) it does not limit anything. |
 
 Input buttons: bit 0 primary attack, bit 1 secondary attack, bit 2 use. Weapon request: 0 = none, 1 to 9 = pick that weapon slot, 10 = next weapon, 11 = previous weapon, 12 = the world side is in tool mode (the player holds one of its own items: the player side puts its weapon away and does not draw it), 13 = tool mode off (draw the weapon again), 14 = cheat: give the player every weapon with full ammo and every power the player side has. The world side sends a request once, in the packet right after the key press. The player side remembers a button press until it has used it, so a very short click is not lost. Input is sent about 60 times a second while the world side's window has the player's attention (no menu open). If nothing arrives for 500 ms the player side goes back to reading its own keyboard.
 
@@ -63,6 +63,8 @@ The ground is a grid of vertical columns. A column is solid from far below up to
 - The world side expresses the field in the **player side's** coordinate space, so the player side can use it as is.
 - The player side drops chunks that are far away. The world side resends chunks now and then, so a lost packet is repaired.
 
+Limit: this is a height grid, which fits terrain. A world with walls, ceilings or overhangs (a Doom level, an interior) cannot be described by it. That world needs a new message type (for example boxes or triangles per chunk) and a protocol version bump; the player side's `vo_field` would need to sweep against that shape too. Nothing else in the protocol depends on the height grid.
+
 ### Coordinates on the wire
 
 Meters. Right-handed, Y up: +X right, +Y up, -Z forward (like OpenGL). Look direction is a unit vector in the same space.
@@ -84,3 +86,10 @@ Positions are absolute in the sender's own map. The receiver decides what they m
 | Hello, role 1, pid 1234, seq 1 | `56 4F 01 01 01 00 00 00  01 00 00 00 D2 04 00 00` |
 | Heartbeat, uptime 5000, seq 2 | `56 4F 01 02 02 00 00 00  88 13 00 00` |
 | PlayerState, pos (1,2,3), look (0,0,-1), seq 3 | `56 4F 01 03 03 00 00 00  00 00 80 3F  00 00 00 40  00 00 40 40  00 00 00 00  00 00 00 00  00 00 80 BF` |
+
+
+## Adding a world or a player game
+
+- **New world side** (Valheim today): copy `worlds/valheim/` for the layout, keep the folder jobs (Input, Player, Collision, Combat, Lighting, Overlay, Items), put game numbers in its own `Config/` and item list files. C# worlds share `worlds/common/` (`VoLink.cs`, `FrameReader.cs`); C/C++ worlds use `protocol/vo_link.c`. Convert units and axes in the world's own code; the wire is always meters, Y up, right-handed, forward -Z.
+- **New player side** (Outcast today): it must read `Input`, send `PlayerState`, `HitActor`, `HitWorld`, `PlayerLight` and publish the picture file (`FRAME.md`). Weapon numbers and damage points are its own.
+- Anything new that is not in the list above: add a message type, bump the protocol version, add it to the golden packets and all three test files.
