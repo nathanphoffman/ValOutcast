@@ -1,6 +1,6 @@
 // Checks that every Valheim function and field the plugin hooks into or calls still exists in the installed game.
 // Valheim updates often rename things, and a missing one would only show up as an error at runtime.
-// Usage: tools/check_valheim_api.sh [path to Valheim folder]
+// Usage: tools/worlds/valheim/check_valheim_api.sh [path to Valheim folder]
 using System;
 using System.IO;
 using System.Linq;

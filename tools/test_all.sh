@@ -6,5 +6,5 @@ python3 tools/test_protocol.py
 tools/test_c.sh | tail -1
 tools/test_csharp.sh | tail -1
 tools/test_field.sh
-tools/check_valheim_api.sh
+tools/worlds/valheim/check_valheim_api.sh
 echo "ALL TESTS PASSED"

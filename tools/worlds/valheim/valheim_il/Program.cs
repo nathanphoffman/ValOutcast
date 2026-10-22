@@ -1,9 +1,9 @@
 // Looks inside Valheim's assembly_valheim.dll, to find out how its code works before hooking into it.
-//   dotnet run --project tools/valheim_il -- members <Type> <text>     methods and fields of a type whose name contains <text>
+//   dotnet run --project tools/worlds/valheim/valheim_il -- members <Type> <text>     methods and fields of a type whose name contains <text>
 //                                                                      (<Type> may be * for every type)
-//   dotnet run --project tools/valheim_il -- calls <Type> <Method>     the calls, field reads and strings in one method (its logic, roughly)
-//   dotnet run --project tools/valheim_il -- il <Type> <Method>        the same with instruction offsets and jump targets
-//   dotnet run --project tools/valheim_il -- callers <text>            every method that calls something whose name contains <text>
+//   dotnet run --project tools/worlds/valheim/valheim_il -- calls <Type> <Method>     the calls, field reads and strings in one method (its logic, roughly)
+//   dotnet run --project tools/worlds/valheim/valheim_il -- il <Type> <Method>        the same with instruction offsets and jump targets
+//   dotnet run --project tools/worlds/valheim/valheim_il -- callers <text>            every method that calls something whose name contains <text>
 using System;
 using System.IO;
 using System.Linq;

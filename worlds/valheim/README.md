@@ -1,10 +1,10 @@
 # valheim
 
-The world side. BepInEx + Harmony plugin (C#). `docs/PLAN.md` has the architecture and the per-file roles.
+The world side. BepInEx + Harmony plugin (C#). `docs/PLAN.md` has the architecture; `docs/worlds/valheim.md` has the per-file roles.
 
 - `src/Plugin.cs`: entry point, config, the per-frame order of everything.
-- `src/VoLink.cs`: the connection code (no Unity types, so it can be tested alone).
-- `src/Overlay.cs`, `FrameReader.cs`: Outcast's picture (request, wait, draw).
+- `../common/VoLink.cs`: the connection code (no Unity types, so it can be tested alone), shared with other worlds.
+- `src/Overlay.cs`, `../common/FrameReader.cs`: Outcast's picture (request, wait, draw).
 - `src/PlayerFollow.cs`: moves the Valheim player and camera to match Outcast; blocks Valheim's own input while Outcast drives.
 - `src/InputForwarder.cs`: keys and mouse to Outcast; what counts as "a menu is open".
 - `src/TerrainStreamer.cs`, `Combat.cs`, `WorldHits.cs`: ground and objects out, creatures out and hits in, hits on trees and rocks.
@@ -17,4 +17,4 @@ The world side. BepInEx + Harmony plugin (C#). `docs/PLAN.md` has the architectu
 Build with `dotnet build`. It copies itself into Valheim's `BepInEx/plugins/ValOutcast`.
 Valheim must be started with the Steam launch option `./start_game_bepinex.sh %command%`.
 Look at `BepInEx/LogOutput.log` (`link:`, `overlay:`, `perf:`, `creatures:`, `hit applied`, `world hit`, `use:`, `tool mode`).
-After a Valheim update run `tools/check_valheim_api.sh`; to look inside Valheim's code use `tools/valheim_il`.
+After a Valheim update run `tools/worlds/valheim/check_valheim_api.sh`; to look inside Valheim's code use `tools/worlds/valheim/valheim_il`.
