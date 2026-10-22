@@ -24,6 +24,8 @@ Last updated 2026-10-21. If you are picking this project up cold, read "Read thi
  |    applies hits   <-------------------------------- HitActor -------|                                          |
  |  - WorldHits: damages trees/rocks  <-------------- HitWorld --------|  shots / saber that hit the ground columns |
  |  - PlayerDamagePatch: creature hits ---------------- PlayerHurt ---->  Outcast health is the real health       |
+
+ |  - SaberGlow: blue point light <------------------- PlayerLight ----|  sent while the saber is lit                  |
  |  - WorldLight: sun/ambient ------------------------- WorldContext -->  lights Outcast's models like Valheim's   |
  |                                                                                                               |
  |  Overlay.cs  <======= /dev/shm/valoutcast_frame (shared memory, RGBA picture) ======= vo_overlay.cpp (renderer)|
@@ -54,6 +56,8 @@ Last updated 2026-10-21. If you are picking this project up cold, read "Read thi
 | `valheim/src/WorldHits.cs` | Applies HitWorld: damages trees/rocks/ore. |
 | `valheim/src/Interactor.cs` | The Use key (E) on what the crosshair is over. |
 | `valheim/src/ToolMode.cs`, `HeldItemView.cs` | Tool mode (R) and the on-screen copy of the held Valheim item. |
+| `valheim/src/OutcastItems.cs`, `valheim/assets/icons/` | Outcast weapons as craftable Valheim items (a copy of the Flint item with a new name/icon, plus a recipe), registered by Harmony patches on `ObjectDB`/`ZNetScene`; start items given once via `Player.m_customData`. Icons are Outcast's own `w_icon_*.tga`, converted to PNG and embedded. Inventory-only for now: not yet linked to Outcast. |
+| `valheim/src/SaberGlow.cs` | Blue point light at the player's hand while the lightsaber is lit (PlayerLight message). Off in tool mode. Tuning constants at the top of the file. |
 | `valheim/src/HudHider.cs`, `WorldLight.cs`, `PerfStats.cs`, `TestSpawner.cs` | Hides the hotbar; sends sun/ambient light; timing log every 10 s; F8 spawns a boar. |
 | `outcast/src/vo_bridge.cpp/h` | The game-module side of the bridge (copied into OpenJK's `codeJK2/game/valoutcast/`). |
 | `outcast/src/vo_field.cpp/h` | The collision field (grid of columns) and its sweep test. Pure math; unit tested. |
@@ -106,7 +110,7 @@ Last updated 2026-10-21. If you are picking this project up cold, read "Read thi
 
 ## Message list (summary; the spec is `protocol/PROTOCOL.md`)
 
-Header 8 bytes (magic, version, type, sequence). Types: 1 Hello, 2 Heartbeat, 3 PlayerState (player to world), 4 CollisionSection, 5 CollisionReset, 6 ActorUpsert, 7 ActorRemove, 8 HitActor (player to world), 9 PlayerHurt (world to player), 10 Input (buttons, move axes, look deltas, weapon request), 11 WorldContext (sun, ambient), 12 HitWorld (player to world). Weapon request values: 0 none, 1-9 slot, 10 next, 11 previous, 12 tool mode on (put weapon away), 13 tool mode off. The picture file header carries the request counter (byte 20) and the wanted horizontal FOV (byte 24). Adding a message means touching: `vo_link.h/c`, `vo_protocol.py`, `VoLink.cs`, `tools/make_golden.py` (then run it to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
+Header 8 bytes (magic, version, type, sequence). Types: 13 PlayerLight (color, intensity; a lit lightsaber), 1 Hello, 2 Heartbeat, 3 PlayerState (player to world), 4 CollisionSection, 5 CollisionReset, 6 ActorUpsert, 7 ActorRemove, 8 HitActor (player to world), 9 PlayerHurt (world to player), 10 Input (buttons, move axes, look deltas, weapon request), 11 WorldContext (sun, ambient), 12 HitWorld (player to world), 13 PlayerLight (player to world). Weapon request values: 0 none, 1-9 slot, 10 next, 11 previous, 12 tool mode on (put weapon away), 13 tool mode off, 14 cheat: give everything. The picture file header carries the request counter (byte 20) and the wanted horizontal FOV (byte 24). Adding a message means touching: `vo_link.h/c`, `vo_protocol.py`, `VoLink.cs`, `tools/make_golden.py` (then run it to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
 
 ## Game-neutral rule
 
@@ -158,6 +162,10 @@ We may swap in other games later (for example Skyrim or Doom 2016). So:
 
 **Overlay picture.** Outcast draws into an off-screen buffer (RGBA, transparent background; the level, its people, rain and props are not drawn), converts to straight alpha with edge-color fix (no dark outlines), publishes it. Valheim draws it stretched over the whole screen with brightness 0.85; start Outcast with the same window shape as Valheim's. No depth sharing: Outcast's things always draw on top of Valheim's world. Hidden while any Valheim menu is open. Lighting: Valheim sends sun direction and sun/ambient colors 4x a second; Outcast lights its models with them (bright by day, dark at night).
 
+**Saber glow.** While the lightsaber is lit, Outcast sends PlayerLight (blue, intensity 1; off otherwise, resent every 0.5 s). `SaberGlow` shows a Unity point light (range 14 m, intensity 3.5, slow gentle pulse) 0.25 right / 0.2 down / 0.7 forward of the camera. Built, not yet confirmed in the real games; brightness and offset are guesses (constants in `SaberGlow.cs`).
+
+**Cheat code.** Typing `valleyofthejedi` in Valheim's chat box (`CheatCode.cs`, patch on `Chat.SendText`; the text is not sent on) sends weapon request 14; Outcast gives every weapon with full ammo (`G_Give all`, saber set up) and every force power at level 3 (`vo_bridge.cpp`). When crafted weapons are linked to Outcast (Next steps 6), this must bypass that check. Built, not yet confirmed in the real games.
+
 **Shots.** Start at the drawn barrel, fly at 30% speed, always sent to Outcast's view (missiles, beams, effects bypass the "visible from here" rules of the hidden level). Valheim's crosshair is used; Outcast's is off.
 
 **Tool mode (R).** Switches between Outcast weapons and Valheim's own items (sword, bow, hammer, hoe, torch...). Outcast puts its weapon away (weapon request 12: `cg_drawGun 0`; a drawn saber is swapped for a gun first because the saber puts Outcast's camera behind the player) and keeps walking and aiming. Valheim gets its input back (the `TakeInput` blocks are off), shows the hotbar (number keys pick Valheim items, the wheel is Valheim's) and runs its own attacks, blocking, building and tools. Walking/jumping/running are zeroed on the Valheim side (`SetControls` patch) because Outcast moves the player and running on the spot would drain the stamina a swing needs. The Use key is handled by Valheim itself in this mode. `HeldItemView` draws the held items (right and left hand) in front of the camera.
@@ -187,10 +195,25 @@ We may swap in other games later (for example Skyrim or Doom 2016). So:
 3. **Performance.** Reduce the overlay wait: read the picture back asynchronously (pixel buffer objects, double buffering), do the alpha conversion on the GPU, and/or accept one frame of latency when the wait would exceed a budget. Measure with the `perf:` log line and `tools/fake_overlay_client.py`.
 4. **Verify the unconfirmed features in the real games** (see Status) and fix what the user reports: Use key, HitWorld on a real tree/rock (damage may be too low for large trees), lighter collision, menu mode, hotbar, `HeldItemView` offsets and special items.
 5. **Lightsaber camera and first-person body.** Either force Outcast's first-person view while the saber is out or accept the view; draw Valheim's own arms properly.
-6. **Equipment mapping.** Map an equipped Valheim item to an Outcast weapon (a table sent as a weapon request) so the Valheim inventory matters.
-7. **Weather and time of day** beyond lighting; **save syncing.**
-8. **Multiplayer (long term).** Each player runs both games; Valheim's networking carries positions and damage. Others would see a normal Valheim character unless Kyle's model and animations are converted for Unity and weapon effects are recreated from synced events. Discussed, not planned in detail.
-9. **Release polish:** one command to install everything, a Windows path (shared memory), documentation for other users.
+6. **Crafted Outcast weapons (decided by the user, not built yet).** Outcast weapons and ammo become Valheim items that must be crafted; Outcast only allows what is in the Valheim inventory (new message for owned weapons/ammo; ammo count has to stay in sync). Unlock order:
+
+| Weapon | Where | Material idea (first guess, to tune) |
+|---|---|---|
+| Stun baton | Start (no crafting) | none |
+| Bryar pistol | Meadows | wood, flint, leather scraps, resin |
+| E-11 blaster | Black Forest | bronze/copper, core wood, resin |
+| Bowcaster | Swamp | iron, ancient bark, leech/entrails |
+| Repeater | Mountain | silver, obsidian, wolf pelt |
+| Flechette | Plains | black metal, flax, tar |
+| Lightsaber | Mistlands | refined eitr, carapace, yggdrasil wood |
+| Rocket launcher | Ashlands | flametal, ashlands items |
+| Disruptor, DEMP2, thermal detonator, trip mine, detonation pack | Deep North | deep north materials |
+
+**Built so far:** stun baton (given once at first spawn) and bryar pistol (workbench: 8 wood, 10 flint, 4 leather scraps, 5 resin) exist as inventory items; Outcast does not read them yet and ammo is not made. Ammo is crafted too, from the same biome's cheap materials. **No Jotunn or other item library (user's decision):** register the items and recipes ourselves with Harmony patches on `ObjectDB`, so users need nothing beyond BepInEx. Open: the exact material lists, and how Outcast's ammo counter follows the Valheim stack.
+7. **Equipment mapping.** Map an equipped Valheim item to an Outcast weapon (a table sent as a weapon request) so the Valheim inventory matters.
+8. **Weather and time of day** beyond lighting; **save syncing.**
+9. **Multiplayer (long term).** Each player runs both games; Valheim's networking carries positions and damage. Others would see a normal Valheim character unless Kyle's model and animations are converted for Unity and weapon effects are recreated from synced events. Discussed, not planned in detail.
+10. **Release polish:** one command to install everything, a Windows path (shared memory), documentation for other users.
 
 ## Risks
 

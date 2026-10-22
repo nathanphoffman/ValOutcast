@@ -1,6 +1,8 @@
 // ValOutcast bridge, Outcast side. This is the player side of the link.
 #include "vo_bridge.h"
 #include "vo_field.h"
+#include "../g_local.h"
+#include "../wp_saber.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -50,7 +52,7 @@ static uint32_t s_inputMs = 0;
 static float s_yaw = 0.0f, s_pitch = 0.0f;   // Outcast angles, degrees, while Valheim drives the view
 static qboolean s_inputLive = qfalse;
 static uint32_t s_buttonLatch = 0;   // button presses not yet used by a game frame (a click can be shorter than a frame)
-static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous, 12 Valheim tool mode on (weapon put away), 13 tool mode off
+static int s_weaponRequest = 0;      // 1-9 pick a slot, 10 next, 11 previous, 12 Valheim tool mode on (weapon put away), 13 tool mode off, 14 cheat: give everything
 
 typedef void (*VO_TraceFn)(trace_t *, const vec3_t, const vec3_t, const vec3_t, const vec3_t, const int, const int, const EG2_Collision, const int);
 static VO_TraceFn s_realTrace = NULL;   // the game's own trace, which VO_PlayerTrace wraps
@@ -317,6 +319,15 @@ void VO_Frame(void)
 				if (ent->client->ps.weapon == WP_SABER) gi.SendConsoleCommand("weapon 3\n");
 				gi.cvar_set("cg_drawGun", "0");
 				cmd[0] = 0;
+			} else if (s_weaponRequest == 14) {
+				// Cheat code: every weapon with full ammo, and every force power at the top level.
+				const qboolean hadSaber = (ent->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) ? qtrue : qfalse;
+				G_Give(ent, "all", "", 1);
+				if (!hadSaber) WP_SaberInitBladeData(ent);
+				for (int i = 0; i < NUM_FORCE_POWERS; i++) ent->client->ps.forcePowerLevel[i] = FORCE_LEVEL_3;
+				ent->client->ps.forcePowersKnown = (1 << NUM_FORCE_POWERS) - 1;
+				ent->client->ps.forcePower = ent->client->ps.forcePowerMax;
+				cmd[0] = 0;
 			} else if (s_weaponRequest == 13) {
 				gi.cvar_set("cg_drawGun", "1");
 				cmd[0] = 0;
@@ -356,6 +367,17 @@ void VO_Frame(void)
 		VO_ToWire(feet, pos, UNITS_PER_METER);
 		VO_ToWire(forward, look, 1.0f);
 		vo_link_send_player_state(&s_link, pos, look);
+
+		// A lit lightsaber is a light the world side can show (blue torchlight). Resent twice a second so a lost packet or a restart of the other game heals.
+		static qboolean lastSaberLit = qfalse;
+		static uint32_t lastLightMs = 0;
+		const qboolean saberLit = (ent->client->ps.weapon == WP_SABER && ent->client->ps.saberActive) ? qtrue : qfalse;
+		if (saberLit != lastSaberLit || VO_NowMs() - lastLightMs > 500) {
+			static const float blue[3] = { 0.25f, 0.5f, 1.0f };
+			lastSaberLit = saberLit;
+			lastLightMs = VO_NowMs();
+			vo_link_send_player_light(&s_link, blue, saberLit ? 1.0f : 0.0f);
+		}
 	}
 
 	if (++s_framesSinceEvict >= 100) {

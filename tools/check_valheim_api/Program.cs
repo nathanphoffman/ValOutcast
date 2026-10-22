@@ -51,6 +51,9 @@ class Program
         }
 
         // Harmony patches
+        Method("Player", "OnSpawned"); Method("Chat", "SendText");
+        Method("ObjectDB", "Awake"); Method("ObjectDB", "CopyOtherDB"); Method("ObjectDB", "UpdateRegisters"); Method("ZNetScene", "Awake");
+        Field("ObjectDB", "m_items"); Field("ObjectDB", "m_recipes"); Field("ZNetScene", "m_namedPrefabs"); Field("Player", "m_customData");
         Method("Player", "FixedUpdate", 0);
         Method("Player", "TakeInput", 0);
         Method("Player", "Interact", 3);

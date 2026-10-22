@@ -110,6 +110,12 @@ int main(int argc, char **argv)
 		check(vo_decode_input(want + 8, 24, &in2) == -1, "input without weapon is short");
 
 		{
+			const float lrgb[3] = { 0.25f, 0.5f, 1.0f };
+			n = golden("player_light", want, 64);
+			check(n > 0 && vo_encode_player_light(got, 13, lrgb, 0.75f) == n && memcmp(got, want, n) == 0, "player_light bytes");
+		}
+
+		{
 			vo_world w, w2;
 			w.sun_dir[0] = 0.0f; w.sun_dir[1] = 0.8f; w.sun_dir[2] = 0.6f;
 			w.sun_rgb[0] = 1.0f; w.sun_rgb[1] = 0.9f; w.sun_rgb[2] = 0.5f;

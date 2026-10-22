@@ -9,6 +9,9 @@ The world side. BepInEx + Harmony plugin (C#). `docs/PLAN.md` has the architectu
 - `src/InputForwarder.cs`: keys and mouse to Outcast; what counts as "a menu is open".
 - `src/TerrainStreamer.cs`, `Combat.cs`, `WorldHits.cs`: ground and objects out, creatures out and hits in, hits on trees and rocks.
 - `src/Interactor.cs`, `ToolMode.cs`, `HeldItemView.cs`, `HudHider.cs`: the Use key, tool mode (R), the held-item view, the hotbar.
+- `src/OutcastItems.cs`: Outcast weapons as craftable Valheim items (icons in `assets/icons`).
+- `src/CheatCode.cs`: the `valleyofthejedi` chat cheat.
+- `src/SaberGlow.cs`: blue light while the lightsaber is lit.
 - `src/WorldLight.cs`, `PerfStats.cs`, `TestSpawner.cs`: light to Outcast, timing log, F8 boar.
 
 Build with `dotnet build`. It copies itself into Valheim's `BepInEx/plugins/ValOutcast`.

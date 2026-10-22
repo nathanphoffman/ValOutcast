@@ -254,6 +254,7 @@ namespace ValOutcast
             if (player == null || !PlayerFollow.Active || !PlayerFollow.HasCurrent)
             {
                 HeldItemView.Clear();
+                SaberGlow.Clear();
                 return;
             }
             if (player.m_eye == null || PlayerFollow.CurrentLook.sqrMagnitude < 0.0001f) return;
@@ -266,6 +267,7 @@ namespace ValOutcast
             if (ToolMode.Active) position += rotation * ToolMode.CameraOffset;
             __instance.transform.position = position;
             __instance.transform.rotation = rotation;
+            SaberGlow.Update(Plugin.Link, __instance.transform);
             if (ToolMode.Active) HeldItemView.Update(player, __instance.transform);
             else HeldItemView.Clear();
         }

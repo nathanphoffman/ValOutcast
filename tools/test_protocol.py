@@ -49,6 +49,9 @@ assert vo.decode_world_context(b"\x00" * 10) is None
 assert vo.encode_hit_world(12, (1, 2, 3), (0, 0, -1), 25.0, 1) == golden["hit_world"]
 assert vo.decode_hit_world(golden["hit_world"][8:]) == ((1.0, 2.0, 3.0), (0.0, 0.0, -1.0), 25.0, 1)
 assert vo.decode_hit_world(b"\x00") is None
+assert vo.encode_player_light(13, (0.25, 0.5, 1.0), 0.75) == golden["player_light"]
+assert vo.decode_player_light(golden["player_light"][8:]) == ((0.25, 0.5, 1.0), 0.75)
+assert vo.decode_player_light(b"\x00" * 10) is None
 assert vo.decode_hit_actor(b"\x00") is None and vo.decode_input(b"") is None
 
 logs = []

@@ -18,6 +18,7 @@ MSG_PLAYER_HURT = 9
 MSG_INPUT = 10
 MSG_WORLD_CONTEXT = 11
 MSG_HIT_WORLD = 12
+MSG_PLAYER_LIGHT = 13
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -115,6 +116,18 @@ def decode_hit_world(payload):
         return None
     v = struct.unpack_from("<7fB", payload)
     return v[0:3], v[3:6], v[6], v[7]
+
+
+def encode_player_light(seq, rgb, intensity):
+    return _HEADER.pack(MAGIC, VERSION, MSG_PLAYER_LIGHT, seq) + struct.pack("<4f", *rgb, intensity)
+
+
+def decode_player_light(payload):
+    """Return (rgb, intensity) or None."""
+    if len(payload) < 16:
+        return None
+    v = struct.unpack_from("<4f", payload)
+    return v[0:3], v[3]
 
 
 def encode_player_hurt(seq, damage, direction, source):
@@ -237,6 +250,7 @@ class Link:
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
                 MSG_HIT_ACTOR: decode_hit_actor, MSG_HIT_WORLD: decode_hit_world, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
+                MSG_PLAYER_LIGHT: decode_player_light,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

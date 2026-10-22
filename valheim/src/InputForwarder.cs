@@ -13,6 +13,7 @@ namespace ValOutcast
         private float _nextSend;
         private float _yaw, _pitch;
         private int _weapon;
+        private bool _giveAll;
 
         private static bool Button(string name)
         {
@@ -23,6 +24,12 @@ namespace ValOutcast
         public void RequestWeapon(int request)
         {
             _weapon = request;
+        }
+
+        /// <summary>The cheat code was typed: asks the player side to give everything (weapon request 14), sent as soon as no menu or chat box is open.</summary>
+        public void RequestGiveAll()
+        {
+            _giveAll = true;
         }
 
         internal static bool MenuOpen()
@@ -91,6 +98,7 @@ namespace ValOutcast
             float right = (Button("Right") ? 1f : 0f) - (Button("Left") ? 1f : 0f);
             float up = Button("Jump") ? 1f : (Button("Crouch") ? -1f : 0f);
 
+            if (_giveAll) { _weapon = 14; _giveAll = false; }
             link.SendInput(buttons, forward, right, up, _yaw, _pitch, _weapon);
             _yaw = _pitch = 0f;
             _weapon = 0;

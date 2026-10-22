@@ -19,6 +19,7 @@ namespace ValOutcast
         private readonly TerrainStreamer _streamer = new TerrainStreamer();
         private readonly CreatureStreamer _creatures = new CreatureStreamer();
         private readonly InputForwarder _input = new InputForwarder();
+        public static InputForwarder Input;
         private Overlay _overlay;
         private readonly HudHider _hud = new HudHider();
         private readonly WorldLight _light = new WorldLight();
@@ -62,6 +63,7 @@ namespace ValOutcast
             _perf = new PerfStats(msg => Logger.LogInfo(msg));
             try
             {
+                Input = _input;
                 _harmony = new Harmony("com.valoutcast.bridge");
                 _harmony.PatchAll();
             }

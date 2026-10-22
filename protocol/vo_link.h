@@ -22,6 +22,7 @@ extern "C" {
 #define VO_MSG_INPUT 10
 #define VO_MSG_WORLD_CONTEXT 11
 #define VO_MSG_HIT_WORLD 12
+#define VO_MSG_PLAYER_LIGHT 13
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -113,6 +114,9 @@ void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const floa
  * in its own points. kind: 0 = shot, 1 = lightsaber. 40 bytes. */
 int vo_encode_hit_world(uint8_t *out, uint32_t seq, const float pos[3], const float dir[3], float damage, int kind);
 void vo_link_send_hit_world(vo_link *link, const float pos[3], const float dir[3], float damage, int kind);
+/* PlayerLight: a light the player carries (for example a lit lightsaber). color 0..1 per channel, intensity 0 = off. 24 bytes. */
+int vo_encode_player_light(uint8_t *out, uint32_t seq, const float rgb[3], float intensity);
+void vo_link_send_player_light(vo_link *link, const float rgb[3], float intensity);
 /* Returns the message type, or -1 if the packet is not valid. */
 int vo_decode(const uint8_t *data, int len, uint32_t *seq_out);
 

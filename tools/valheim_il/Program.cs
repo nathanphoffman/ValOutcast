@@ -31,7 +31,7 @@ class Program
         }
         if (a[0] == "members")
         {
-            foreach (var t in asm.MainModule.Types.Where(t => a[1] == "*" || t.Name == a[1]))
+            foreach (var t in asm.MainModule.GetTypes().Where(t => a[1] == "*" || t.Name == a[1]))
             {
                 string text = a.Length > 2 ? a[2] : "";
                 foreach (var m in t.Methods.Where(m => m.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0))

@@ -24,6 +24,7 @@ namespace ValOutcast
         public const byte MsgPlayerHurt = 9;
         public const byte MsgInput = 10;
         public const byte MsgWorldContext = 11;
+        public const byte MsgPlayerLight = 13;
         public const uint ButtonAttack = 1;
         public const uint ButtonAltAttack = 2;
         public const uint ButtonUse = 4;
@@ -60,6 +61,15 @@ namespace ValOutcast
             public float Damage;
             public byte Kind;   // 0 = shot, 1 = lightsaber
         }
+        public struct PlayerLightMsg
+        {
+            public float R, G, B, Intensity;   // Intensity 0 = off
+        }
+        /// <summary>Newest PlayerLight from the player side (a lit lightsaber, say).</summary>
+        public PlayerLightMsg PlayerLight;
+        private long _lastLight;
+        /// <summary>True while PlayerLight packets keep arriving (they are resent twice a second), so a dead player side never leaves a light on.</summary>
+        public bool PlayerLightFresh => Connected && _clock.ElapsedMilliseconds - _lastLight <= 1500;
         public readonly Queue<HitWorldMsg> HitWorlds = new Queue<HitWorldMsg>();
 
         /// <summary>Newest PlayerState (wire coordinates), valid when HasPlayerState is true.</summary>
@@ -221,6 +231,27 @@ namespace ValOutcast
             return b;
         }
 
+        public static byte[] EncodePlayerLight(uint seq, float[] rgb, float intensity)
+        {
+            var b = new byte[24];
+            WriteHeader(b, MsgPlayerLight, seq);
+            for (int i = 0; i < 3; i++) BitConverter.GetBytes(rgb[i]).CopyTo(b, 8 + 4 * i);
+            BitConverter.GetBytes(intensity).CopyTo(b, 20);
+            return b;
+        }
+
+        /// <summary>Reads a PlayerLight packet. Returns false if it is too short.</summary>
+        public static bool DecodePlayerLight(byte[] data, int len, out PlayerLightMsg msg)
+        {
+            msg = default;
+            if (len < 24) return false;
+            msg.R = BitConverter.ToSingle(data, 8);
+            msg.G = BitConverter.ToSingle(data, 12);
+            msg.B = BitConverter.ToSingle(data, 16);
+            msg.Intensity = BitConverter.ToSingle(data, 20);
+            return true;
+        }
+
         public static byte[] EncodeWorldContext(uint seq, float[] sunDir, float[] sunRgb, float[] ambient)
         {
             var b = new byte[44];
@@ -349,6 +380,11 @@ namespace ValOutcast
                 if (type == MsgHitWorld && DecodeHitWorld(_recvBuf, n, out HitWorldMsg hitWorld))
                 {
                     if (HitWorlds.Count < 256) HitWorlds.Enqueue(hitWorld);
+                }
+                if (type == MsgPlayerLight && DecodePlayerLight(_recvBuf, n, out PlayerLightMsg light))
+                {
+                    PlayerLight = light;
+                    _lastLight = now;
                 }
                 if (type == MsgPlayerState && n >= 32)
                 {
