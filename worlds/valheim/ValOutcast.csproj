@@ -8,6 +8,9 @@
     <ValheimDir>$(HOME)/.local/share/Steam/steamapps/common/Valheim</ValheimDir>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../common/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="BepInEx"><HintPath>$(ValheimDir)/BepInEx/core/BepInEx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(ValheimDir)/BepInEx/core/0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(ValheimDir)/valheim_Data/Managed/UnityEngine.dll</HintPath><Private>false</Private></Reference>

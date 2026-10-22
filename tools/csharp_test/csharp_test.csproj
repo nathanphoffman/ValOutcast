@@ -5,7 +5,7 @@
     <Nullable>disable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../worlds/valheim/src/VoLink.cs" />
-    <Compile Include="../../worlds/valheim/src/FrameReader.cs" />
+    <Compile Include="../../worlds/common/VoLink.cs" />
+    <Compile Include="../../worlds/common/FrameReader.cs" />
   </ItemGroup>
 </Project>

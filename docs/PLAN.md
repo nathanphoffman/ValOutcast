@@ -16,7 +16,7 @@ Each Valheim frame: read messages, send input, bump the request counter in the f
 
 ## Layout
 
-Layout after restructure phases 1-2 (`worlds/common/` and `tools/worlds/` are still to come).
+Layout after restructure phases 1-2 (`tools/worlds/` is still to come).
 
 | Path | What |
 |---|---|
@@ -97,12 +97,12 @@ All original phases (setup, connection, player sync, terrain collision, creature
 6. Crafted weapons: remaining 11 items (icons are `gfx/hud/w_icon_*.tga` in Outcast's pk3s), ammo items, ammo counter following the Valheim stack. No Jotunn; register items with our own Harmony patches. Unlock order (first guess): stun baton at start, bryar pistol Meadows, E-11 Black Forest, bowcaster Swamp, repeater Mountain, flechette Plains, lightsaber Mistlands, rocket launcher Ashlands, the rest Deep North.
 7. Lightsaber first-person view, saving Outcast state in `Player.m_customData`, weather, save syncing, multiplayer (long term), release polish (installer, Windows).
 
-## Restructure (decided 2026-10-22; phases 1-2 done: folders moved, paths fixed, tests pass; the rest is not done)
+## Restructure (decided 2026-10-22; phases 1-3 done: folders moved, paths fixed, shared C# in `worlds/common/`, tests pass; the rest is not done)
 
 Goal: the player side may change games and the world side will change games; neither should need a rewrite of the shared parts.
 
 1. DONE: `outcast/` is now `player/outcast/`; `valheim/` is now `worlds/valheim/`.
-2. Move `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/vo_link.c`.
+2. DONE: moved `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/vo_link.c`.
 3. Valheim-only tools go to `tools/worlds/valheim/`; per-game notes to `docs/worlds/valheim.md`.
 4. Every world plugin does the same jobs with the same file names: Input, Collision, Actors, Combat, Lighting, Overlay. A new game starts as a copy.
 5. Per-game numbers (damage scale, item-to-weapon mapping) live in that world's folder. The weapon list belongs to the player side.
