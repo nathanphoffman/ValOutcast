@@ -29,6 +29,9 @@ namespace ValOutcast
                 return;
             }
             InteractMethod.Invoke(player, new object[] { hover, false, false });
+            // Valheim's menus close when they see the Use key go down. This frame's press is what opened this one, so it is used up here;
+            // otherwise a crafting station menu would open and close in the same frame.
+            ZInput.ResetButtonStatus("Use");
             Plugin.LogMessage("use: " + hover.name);
         }
     }

@@ -293,6 +293,27 @@ index 149a0eb..17e787b 100644
  		// broadcast entities are always sent, and so is the main player so we don't see noclip weirdness
  		if ( ent->svFlags & SVF_BROADCAST || !e) {
  			SV_AddEntToSnapshot( svEnt, ent, eNums );
+diff --git a/codeJK2/cgame/cg_draw.cpp b/codeJK2/cgame/cg_draw.cpp
+index d0a0df6..6b9eaf7 100644
+--- a/codeJK2/cgame/cg_draw.cpp
++++ b/codeJK2/cgame/cg_draw.cpp
+@@ -249,6 +249,7 @@ CG_DrawMessageLit
+ */
+ static void CG_DrawMessageLit(centity_t *cent,int x,int y)
+ {
++	if (getenv("VO_OVERLAY")) return;	// ValOutcast: no datapad blink or beep (the level's objectives mean nothing in Valheim)
+ 	cgi_R_SetColor(colorTable[CT_WHITE]);
+ 
+ 	if (cg.missionInfoFlashTime	> cg.time )
+@@ -2363,6 +2364,8 @@ static void CG_Draw2D( void )
+ 		CG_DrawCenterString();
+ 	}
+ 
++	if (getenv("VO_OVERLAY")) missionInfo_Updated = qfalse;	// ValOutcast: no "datapad updated" notice
++
+ 	if (missionInfo_Updated)
+ 	{
+ 		if (cg.predicted_player_state.pm_type != PM_DEAD)
 diff --git a/codeJK2/cgame/cg_ents.cpp b/codeJK2/cgame/cg_ents.cpp
 index bad8c73..4b00000 100644
 --- a/codeJK2/cgame/cg_ents.cpp
@@ -600,6 +621,23 @@ index aa8d6c7..d1dad5f 100644
  	if ( other == ent )
  	{
  		assert(0&&"missile hit itself!!!");
+diff --git a/codeJK2/game/g_utils.cpp b/codeJK2/game/g_utils.cpp
+index 95a70c6..e86030e 100644
+--- a/codeJK2/game/g_utils.cpp
++++ b/codeJK2/game/g_utils.cpp
+@@ -241,6 +241,12 @@ void G_SoundOnEnt (gentity_t *ent, soundChannel_t channel, const char *soundPath
+ 		return;
+ 	}
+ 
++	// ValOutcast: the hidden level has no floor under Valheim's ground, so its people "fall to their death" and scream on load
++	if ( getenv("VO_OVERLAY") && soundPath && strstr(soundPath, "falling") )
++	{
++		return;
++	}
++
+ 	cgi_S_UpdateEntityPosition( ent->s.number, ent->currentOrigin );
+ 	if ( cgs.sound_precache[ index ] )
+ 	{
 diff --git a/codeJK2/game/g_weapon.cpp b/codeJK2/game/g_weapon.cpp
 index 4fb25bb..d96dce1 100644
 --- a/codeJK2/game/g_weapon.cpp

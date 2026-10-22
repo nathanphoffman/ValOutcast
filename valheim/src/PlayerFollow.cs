@@ -248,11 +248,27 @@ namespace ValOutcast
     [HarmonyPatch(typeof(GameCamera), "UpdateCamera")]
     internal static class GameCameraPatch
     {
+        // Outcast walks on Valheim's ground as 0.5 m columns, so on a slope the player climbs tiny steps and the camera shakes.
+        // The camera's height is eased over a fraction of a second to hide that; big changes (a real fall or a teleport) are followed at once.
+        private const float HeightEaseSeconds = 0.07f;
+        private const float HeightSnapMeters = 1.5f;
+        private static float _smoothY;
+        private static bool _hasSmoothY;
+
+        private static float SmoothHeight(float y)
+        {
+            if (!_hasSmoothY || Mathf.Abs(y - _smoothY) > HeightSnapMeters) _smoothY = y;
+            else _smoothY += (y - _smoothY) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / HeightEaseSeconds));
+            _hasSmoothY = true;
+            return _smoothY;
+        }
+
         private static void Postfix(GameCamera __instance)
         {
             Player player = Player.m_localPlayer;
             if (player == null || !PlayerFollow.Active || !PlayerFollow.HasCurrent)
             {
+                _hasSmoothY = false;
                 HeldItemView.Clear();
                 SaberGlow.Clear();
                 return;
@@ -262,6 +278,7 @@ namespace ValOutcast
             Vector3 eyeHeight = player.m_eye.position - player.transform.position;
             Quaternion rotation = Quaternion.LookRotation(PlayerFollow.CurrentLook, Vector3.up);
             Vector3 position = PlayerFollow.CurrentPosition + eyeHeight;
+            position.y = SmoothHeight(position.y);
             // Optional: in tool mode the camera can sit a little away from the eyes (see ToolMode.CameraOffset). The held item itself is
             // shown by HeldItemView.
             if (ToolMode.Active) position += rotation * ToolMode.CameraOffset;

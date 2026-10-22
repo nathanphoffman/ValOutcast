@@ -138,7 +138,8 @@ We may swap in other games later (for example Skyrim or Doom 2016). So:
 11. **Leftover state on the machine:** `/dev/shm/valoutcast_frame` outlives the games (a stale request counter once froze a fresh Outcast; now handled by the 250 ms rule). UDP ports 47100/47101 are held by whichever games are running. Several Outcast copies at once fight over the shared file. `pkill -f <text>` kills your own shell if the shell's command line contains the text; use the start/stop scripts.
 12. **Outcast saves cvars (`CVAR_ARCHIVE`) on exit**, so anything set at run time (like `cg_drawGun`) must be reset on start.
 13. **Creatures are sparse in Valheim** (0-2 within 40 m in the Meadows; spawning is timer-based per zone and does not depend on the player walking; checked in Valheim's `SpawnSystem`). Use F8 to test.
-14. **Windows:** the code uses Linux-only calls (mmap, /dev/shm). Windows would need shared-memory replacements.
+14. **The hidden level still runs, so its noises leak.** Its people "fall to their death" (no floor under Valheim's ground) and play `*falling1`; its script raises the datapad notice and beep. In overlay mode `G_SoundOnEnt` (`g_utils.cpp`) drops "falling" sounds and `cg_draw.cpp` skips the datapad notice and beep. To find where a stray sound comes from, run Outcast with `+set s_show 1` and read the log (it names the sound and the entity).
+15. **Windows:** the code uses Linux-only calls (mmap, /dev/shm). Windows would need shared-memory replacements.
 
 ## Status
 
