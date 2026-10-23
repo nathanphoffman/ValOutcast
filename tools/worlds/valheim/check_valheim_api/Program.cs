@@ -55,6 +55,10 @@ class Program
         Method("ObjectDB", "Awake"); Method("ObjectDB", "CopyOtherDB"); Method("ObjectDB", "UpdateRegisters"); Method("ZNetScene", "Awake");
         Method("Tameable", "Tame", 0); Method("Character", "SetTamed", 1); Method("MonsterAI", "SetFollowTarget", 1);
         Field("ItemDrop", "s_instances"); Field("ItemDrop", "m_nview");
+        Field("Projectile", "m_vel"); Field("Projectile", "m_owner");
+        Field("MonsterAI", "m_targetCreature"); Field("MonsterAI", "m_targetStatic");
+        Method("BaseAI", "SetAlerted", 1); Method("Character", "SetMoveDir", 1); Method("Character", "Heal", 2);
+        Method("Character", "GetMaxHealth", 0); Method("Character", "GetLookDir", 0);
         Field("ObjectDB", "m_items"); Field("ObjectDB", "m_recipes"); Field("ZNetScene", "m_namedPrefabs"); Field("Player", "m_customData");
         Method("Player", "FixedUpdate", 0);
         Method("Player", "TakeInput", 0);

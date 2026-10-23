@@ -13,7 +13,7 @@ Options: --walk   send Input (walk forward, slowly turning) as if the Valheim wi
          --weapon N[,N...]  pick weapon slot N (several, separated by commas, are sent 2 s apart) (1 is the lightsaber) a few seconds after starting (14 = the cheat: everything)
          --ahead  add one still creature 3 m straight ahead of the start (for mind trick and push tests)
          --item   add a loose item 2 m ahead of the start (push or pull it with --power 1 or 2)
-         --power N  press ability N (1 to 7: push, pull, speed, mind trick, heal, grip, lightning) for 1 s every 4 s, from 6 s on
+         --power N  press ability N (1 to 7: push, pull, speed, mind trick, heal, grip, lightning; --power 18 sends the weapon request 18, use the selected power) for 1 s every 4 s, from 6 s on
          --dark   send a dim, bluish world light (night) instead of bright daylight
          --nowall leave out the ring wall (flat ground all around)
          --hurt   send PlayerHurt (10 damage) every 8 seconds
@@ -99,6 +99,7 @@ started_at = None
 weapons_sent = 0
 last_print = 0
 last_field = 0
+grips = {}
 try:
     while True:
         was_connected = link.connected
@@ -158,6 +159,12 @@ try:
                 print("[fake_world] HitActor id=%d damage=%.0f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
             if kind == vo.MSG_ACTOR_PUSH:
                 print("[fake_world] ActorPush id=%d strength=%.2f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
+            if kind == vo.MSG_ACTOR_GRIP:
+                grips[value[0]] = grips.get(value[0], 0) + 1
+                if grips[value[0]] % 30 == 1:
+                    print("[fake_world] ActorGrip id=%d strength=%.2f (message %d)" % (value[0], value[1], grips[value[0]]), flush=True)
+            if kind == vo.MSG_ACTOR_HEAL:
+                print("[fake_world] ActorHeal id=%d strength=%.2f" % (value[0], value[1]), flush=True)
             if kind == vo.MSG_ACTOR_CHARM:
                 print("[fake_world] ActorCharm id=%d strength=%.2f" % (value[0], value[1]), flush=True)
             if kind == vo.MSG_HIT_WORLD:

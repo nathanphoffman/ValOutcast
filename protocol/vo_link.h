@@ -26,6 +26,8 @@ extern "C" {
 #define VO_MSG_LOADOUT 14
 #define VO_MSG_ACTOR_PUSH 15
 #define VO_MSG_ACTOR_CHARM 16
+#define VO_MSG_ACTOR_GRIP 17
+#define VO_MSG_ACTOR_HEAL 18
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -123,6 +125,15 @@ void vo_link_send_actor_push(vo_link *link, uint32_t id, float strength, const f
  * (1 = the most the player side can do; the world side decides what that means), direction from the player to the creature. 28 bytes. */
 int vo_encode_actor_charm(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
 void vo_link_send_actor_charm(vo_link *link, uint32_t id, float strength, const float dir[3]);
+
+/* ActorGrip: the player side holds a creature with a held power (Outcast: force grip). Sent every frame while held. Same layout as
+ * HitActor: id, strength 0 to 1 (the power level), direction from the player to the creature. 28 bytes. */
+int vo_encode_actor_grip(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
+void vo_link_send_actor_grip(vo_link *link, uint32_t id, float strength, const float dir[3]);
+
+/* ActorHeal: the player side used a healing power; sent for each creature in reach. Same layout as HitActor: id, strength 0 to 1, direction. 28 bytes. */
+int vo_encode_actor_heal(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
+void vo_link_send_actor_heal(vo_link *link, uint32_t id, float strength, const float dir[3]);
 
 /* Sends a HitActor if connected. */
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);

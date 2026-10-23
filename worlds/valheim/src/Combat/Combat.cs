@@ -25,6 +25,7 @@ namespace ValOutcast
         }
         private readonly HashSet<uint> _sentNow = new HashSet<uint>();
         private readonly List<uint> _gone = new List<uint>();
+        private readonly ForcePowers _force = new ForcePowers();
         private float _nextSend;
         private float _nextReport;
         private int _hitsApplied, _hitsUnknown, _sentCount;
@@ -42,10 +43,14 @@ namespace ValOutcast
                 link.HitActors.Clear();
                 link.ActorPushes.Clear();
                 link.ActorCharms.Clear();
+                link.ActorGrips.Clear();
+                link.ActorHeals.Clear();
+                _force.Release();
                 return;
             }
 
             ApplyHits(link, player);
+            _force.Update(link, player);
 
             if (Time.realtimeSinceStartup >= _nextReport)
             {
@@ -137,9 +142,22 @@ namespace ValOutcast
             while (link.ActorCharms.Count > 0)
             {
                 VoLink.HitActorMsg charm = link.ActorCharms.Dequeue();
-                if (charm.Damage < Tuning.CharmMinStrength) continue;   // Damage holds the strength here
                 if (!_byId.TryGetValue(charm.Id, out Character animal) || animal == null || animal.IsDead() || animal.IsPlayer()) continue;
-                Charm(animal, player);
+                // Damage holds the strength here: levels 1 and 2 only calm the creature.
+                if (charm.Damage < Tuning.CharmMinStrength) _force.Calm(charm.Id, animal, charm.Damage);
+                else Charm(animal, player);
+            }
+
+            while (link.ActorGrips.Count > 0)
+            {
+                VoLink.HitActorMsg grip = link.ActorGrips.Dequeue();
+                if (_byId.TryGetValue(grip.Id, out Character held) && held != null && !held.IsDead() && !held.IsPlayer()) _force.Grip(grip.Id, held, grip.Damage, player);
+            }
+
+            while (link.ActorHeals.Count > 0)
+            {
+                VoLink.HitActorMsg heal = link.ActorHeals.Dequeue();
+                if (_byId.TryGetValue(heal.Id, out Character friend) && friend != null && !friend.IsDead() && !friend.IsPlayer()) _force.Heal(friend, heal.Damage);
             }
 
             // Force push and pull: the player side says which creatures it moved and which way.
@@ -166,6 +184,8 @@ namespace ValOutcast
                     Plugin.LogMessage("hit from Outcast for a creature that is not there (id " + msg.Id + ", damage " + msg.Damage.ToString("0") + ")");
                     continue;
                 }
+
+                if (target.IsTamed()) continue;   // a creature you tamed is on your side: shots and lightning do not hurt it
 
                 var hit = new HitData();
                 hit.m_damage.m_slash = msg.Damage * Tuning.PlayerDamageToValheim;

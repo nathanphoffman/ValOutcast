@@ -20,6 +20,21 @@ namespace ValOutcast
             KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4, KeyCode.F5, KeyCode.F6, KeyCode.F7
         };
 
+        /// <summary>Saber style, previous / next force power, use the selected force power.</summary>
+        private const KeyCode StyleKey = KeyCode.V;
+        private const KeyCode PrevPowerKey = KeyCode.Z;
+        private const KeyCode NextPowerKey = KeyCode.X;
+        private const KeyCode UsePowerKey = KeyCode.G;
+
+        private readonly System.Collections.Generic.HashSet<KeyCode> _keysDown = new System.Collections.Generic.HashSet<KeyCode>();
+
+        /// <summary>True once when the key goes down (ZInput only offers the held state for raw keys).</summary>
+        private bool KeyPressed(KeyCode key)
+        {
+            if (!ZInput.GetKey(key)) { _keysDown.Remove(key); return false; }
+            return _keysDown.Add(key);
+        }
+
         private static bool Button(string name)
         {
             return ZInput.GetButton(name);
@@ -68,6 +83,16 @@ namespace ValOutcast
                 float wheel = ZInput.GetMouseScrollWheel();
                 if (wheel > 0.01f) _weapon = 10;
                 else if (wheel < -0.01f) _weapon = 11;
+            }
+
+            if (!open && !ToolMode.Active)
+            {
+                // Saber style and force power selection (weapon requests 15 to 18).
+                bool style = KeyPressed(StyleKey), prev = KeyPressed(PrevPowerKey), next = KeyPressed(NextPowerKey), use = KeyPressed(UsePowerKey);
+                if (style) _weapon = 15;
+                else if (prev) _weapon = 17;
+                else if (next) _weapon = 16;
+                else if (use) _weapon = 18;
             }
 
             if (!open && ZInput.IsMouseActive())

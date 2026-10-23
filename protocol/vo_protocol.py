@@ -22,6 +22,8 @@ MSG_PLAYER_LIGHT = 13
 MSG_LOADOUT = 14
 MSG_ACTOR_PUSH = 15
 MSG_ACTOR_CHARM = 16
+MSG_ACTOR_GRIP = 17
+MSG_ACTOR_HEAL = 18
 BUTTON_ATTACK = 1
 BUTTON_ALT_ATTACK = 2
 BUTTON_USE = 4
@@ -130,6 +132,24 @@ def encode_actor_charm(seq, actor_id, strength, direction):
 
 
 def decode_actor_charm(payload):
+    """Return (id, strength, direction) or None."""
+    return decode_hit_actor(payload)
+
+
+def encode_actor_grip(seq, actor_id, strength, direction):
+    return _HEADER.pack(MAGIC, VERSION, MSG_ACTOR_GRIP, seq) + struct.pack("<I4f", actor_id, strength, *direction)
+
+
+def decode_actor_grip(payload):
+    """Return (id, strength, direction) or None."""
+    return decode_hit_actor(payload)
+
+
+def encode_actor_heal(seq, actor_id, strength, direction):
+    return _HEADER.pack(MAGIC, VERSION, MSG_ACTOR_HEAL, seq) + struct.pack("<I4f", actor_id, strength, *direction)
+
+
+def decode_actor_heal(payload):
     """Return (id, strength, direction) or None."""
     return decode_hit_actor(payload)
 
@@ -289,7 +309,7 @@ class Link:
             decoders = {
                 MSG_ACTOR_UPSERT: decode_actor_upsert, MSG_ACTOR_REMOVE: decode_actor_remove,
                 MSG_HIT_ACTOR: decode_hit_actor, MSG_HIT_WORLD: decode_hit_world, MSG_PLAYER_HURT: decode_player_hurt, MSG_INPUT: decode_input, MSG_WORLD_CONTEXT: decode_world_context,
-                MSG_PLAYER_LIGHT: decode_player_light, MSG_ACTOR_PUSH: decode_actor_push, MSG_ACTOR_CHARM: decode_actor_charm, MSG_LOADOUT: decode_loadout,
+                MSG_PLAYER_LIGHT: decode_player_light, MSG_ACTOR_PUSH: decode_actor_push, MSG_ACTOR_CHARM: decode_actor_charm, MSG_ACTOR_GRIP: decode_actor_grip, MSG_ACTOR_HEAL: decode_actor_heal, MSG_LOADOUT: decode_loadout,
                 MSG_COLLISION_SECTION: decode_collision_section,
             }
             if msg[0] in decoders:

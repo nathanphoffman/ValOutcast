@@ -22,6 +22,8 @@ namespace ValOutcast
         public const byte MsgHitActor = 8;
         public const byte MsgActorPush = 15;
         public const byte MsgActorCharm = 16;
+        public const byte MsgActorGrip = 17;
+        public const byte MsgActorHeal = 18;
         public const byte MsgHitWorld = 12;
         public const byte MsgPlayerHurt = 9;
         public const byte MsgInput = 10;
@@ -65,6 +67,8 @@ namespace ValOutcast
 
         /// <summary>The player side used a mind power (mind trick) on a creature. Damage holds the strength, 0 to 1; Dir points from the player to the creature.</summary>
         public readonly Queue<HitActorMsg> ActorCharms = new Queue<HitActorMsg>();
+        public readonly Queue<HitActorMsg> ActorGrips = new Queue<HitActorMsg>();
+        public readonly Queue<HitActorMsg> ActorHeals = new Queue<HitActorMsg>();
 
         /// <summary>The player side hit the world itself (a tree, a rock, the ground) rather than a creature. Positions are wire space.</summary>
         public struct HitWorldMsg
@@ -220,6 +224,20 @@ namespace ValOutcast
         {
             byte[] b = EncodeHitActor(seq, id, strength, dir);
             b[3] = MsgActorCharm;
+            return b;
+        }
+
+        public static byte[] EncodeActorGrip(uint seq, uint id, float strength, float[] dir)
+        {
+            byte[] b = EncodeHitActor(seq, id, strength, dir);
+            b[3] = MsgActorGrip;
+            return b;
+        }
+
+        public static byte[] EncodeActorHeal(uint seq, uint id, float strength, float[] dir)
+        {
+            byte[] b = EncodeHitActor(seq, id, strength, dir);
+            b[3] = MsgActorHeal;
             return b;
         }
 
@@ -425,6 +443,14 @@ namespace ValOutcast
                 if (type == MsgActorCharm && DecodeHitActor(_recvBuf, n, out HitActorMsg charm))
                 {
                     if (ActorCharms.Count < 256) ActorCharms.Enqueue(charm);
+                }
+                if (type == MsgActorGrip && DecodeHitActor(_recvBuf, n, out HitActorMsg grip))
+                {
+                    if (ActorGrips.Count < 256) ActorGrips.Enqueue(grip);
+                }
+                if (type == MsgActorHeal && DecodeHitActor(_recvBuf, n, out HitActorMsg heal))
+                {
+                    if (ActorHeals.Count < 256) ActorHeals.Enqueue(heal);
                 }
                 if (type == MsgHitWorld && DecodeHitWorld(_recvBuf, n, out HitWorldMsg hitWorld))
                 {

@@ -16,6 +16,17 @@ namespace ValOutcast
         /// <summary>Items on the ground are sent to the player side so they can be pushed and pulled: how far (m), and the most sent at once.</summary>
         /// <summary>Mind trick strength (the force level divided by 3) needed to tame a creature: 1 means level 3 only.</summary>
         public const float CharmMinStrength = 0.99f;
+        /// <summary>Mind trick levels 1 and 2: how long (s) the creature loses interest.</summary>
+        public const float CalmSecondsLevel1 = 6f;
+        public const float CalmSecondsLevel2 = 20f;
+        /// <summary>Force grip: how high (m) a creature is lifted, how fast (m/s), and the damage per second at full strength (level 2 and up).</summary>
+        public const float GripLiftMeters = 1.8f;
+        public const float GripLiftSpeed = 4f;
+        public const float GripDamagePerSecond = 12f;
+        /// <summary>Force heal: the share of a tame creature's full health restored by a full strength heal.</summary>
+        public const float HealFraction = 0.5f;
+        /// <summary>A lit lightsaber turns projectiles back when they come this close (m).</summary>
+        public const float SaberBlockRadius = 3.5f;
         public const float ItemRange = 18f;
         public const int MaxActors = 48;
         /// <summary>Speed (m/s) given to a loose item by a full strength push or pull, plus a small upward hop so it does not stick.</summary>

@@ -43,6 +43,10 @@ assert vo.encode_actor_push(15, 7, 0.5, (0, 0, -1)) == golden["actor_push"]
 assert vo.decode_actor_push(golden["actor_push"][8:]) == (7, 0.5, (0.0, 0.0, -1.0))
 assert vo.encode_actor_charm(16, 7, 1.0, (0, 0, -1)) == golden["actor_charm"]
 assert vo.decode_actor_charm(golden["actor_charm"][8:]) == (7, 1.0, (0.0, 0.0, -1.0))
+assert vo.encode_actor_grip(17, 7, 1.0, (0, 0, -1)) == golden["actor_grip"]
+assert vo.decode_actor_grip(golden["actor_grip"][8:]) == (7, 1.0, (0.0, 0.0, -1.0))
+assert vo.encode_actor_heal(18, 7, 1.0, (0, 0, -1)) == golden["actor_heal"]
+assert vo.decode_actor_heal(golden["actor_heal"][8:]) == (7, 1.0, (0.0, 0.0, -1.0))
 assert vo.encode_player_hurt(9, 10.0, (1, 0, 0), 42) == golden["player_hurt"]
 assert vo.decode_player_hurt(golden["player_hurt"][8:]) == (10.0, (1.0, 0.0, 0.0), 42)
 assert vo.encode_input(10, 3, 1.0, -1.0, 0.0, 0.5, -0.5, 4) == golden["input"]

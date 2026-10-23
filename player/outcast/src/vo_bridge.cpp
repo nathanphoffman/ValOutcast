@@ -170,6 +170,7 @@ static void VO_SendProxyHits(const gentity_t *player)
 	}
 }
 
+extern int VO_SelectedForcePower(void);   // in the game's pmove code, which can see the client game's selection
 extern float forcePushPullRadius[];
 extern float forcePushCone[];
 extern float forcePullCone[];
@@ -262,6 +263,79 @@ static void VO_ForceMindTrickProxies(gentity_t *player)
 	const float strength = (float)powerLevel / (float)FORCE_LEVEL_3;
 	if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: mind trick on creature %u, strength %.2f\n", (unsigned)s_proxies[best].id, strength);
 	vo_link_send_actor_charm(&s_link, s_proxies[best].id, strength, wire);
+}
+
+// Direction (wire space) from the player to a creature, flat on the ground.
+static void VO_DirToProxy(gentity_t *player, const Proxy &p, float wire[3])
+{
+	vec3_t flat;
+	VectorSubtract(p.ent->currentOrigin, player->currentOrigin, flat);
+	flat[2] = 0.0f;
+	VectorNormalize(flat);
+	VO_ToWire(flat, wire, 1.0f);
+}
+
+// Force heal: the game heals the player; creatures in reach are reported (ActorHeal) so the world side can heal its friendly ones.
+static void VO_ForceHealProxies(gentity_t *player)
+{
+	playerState_t *ps = &player->client->ps;
+	const int powerLevel = ps->forcePowerLevel[FP_HEAL];
+	if (!(ps->forcePowersKnown & (1 << FP_HEAL)) || powerLevel <= 0 || ps->forcePower < forcePowerNeeded[FP_HEAL]) return;
+	for (int i = 0; i < s_proxyCount; i++) {
+		if (s_proxies[i].loose) continue;
+		if (Distance(s_proxies[i].ent->currentOrigin, player->currentOrigin) > forcePushPullRadius[powerLevel]) continue;
+		float wire[3];
+		VO_DirToProxy(player, s_proxies[i], wire);
+		vo_link_send_actor_heal(&s_link, s_proxies[i].id, (float)powerLevel / (float)FORCE_LEVEL_3, wire);
+	}
+}
+
+// Force grip, a held power. The game's own grip needs one of its own characters, so the creature you look at when the key goes down
+// is held for as long as the key stays down (ActorGrip every frame), and the force pool is drained here.
+static qboolean s_useForcePending = qfalse;   // the selected force power is to be used on the next game frame
+static uint32_t s_gripId = 0;
+static qboolean s_gripSpent = qfalse;   // the pool ran out: no new grip until the key is let go
+
+static void VO_ForceGripProxies(gentity_t *player, qboolean down, qboolean pressed)
+{
+	playerState_t *ps = &player->client->ps;
+	if (!down) { s_gripId = 0; s_gripSpent = qfalse; return; }
+	const int powerLevel = ps->forcePowerLevel[FP_GRIP];
+	if (s_gripSpent || !(ps->forcePowersKnown & (1 << FP_GRIP)) || powerLevel <= 0) return;
+
+	if (s_gripId == 0) {
+		if (!pressed || ps->forcePower < forcePowerNeeded[FP_GRIP]) return;
+		vec3_t forward, eye;
+		AngleVectors(ps->viewangles, forward, NULL, NULL);
+		VectorCopy(player->currentOrigin, eye);
+		eye[2] += ps->viewheight;
+		int best = -1;
+		float bestDot = 0.95f;
+		for (int i = 0; i < s_proxyCount; i++) {
+			if (s_proxies[i].loose) continue;
+			vec3_t center, to;
+			VectorCopy(s_proxies[i].ent->currentOrigin, center);
+			center[2] += s_proxies[i].ent->maxs[2] * 0.5f;
+			VectorSubtract(center, eye, to);
+			const float dist = VectorNormalize(to);
+			if (dist > forcePushPullRadius[powerLevel] || dist < 1.0f) continue;
+			const float dot = DotProduct(to, forward);
+			if (dot > bestDot) { bestDot = dot; best = i; }
+		}
+		if (best < 0) return;
+		s_gripId = s_proxies[best].id;
+		ps->forcePower -= forcePowerNeeded[FP_GRIP];
+		if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: grip on creature %u\n", (unsigned)s_gripId);
+	}
+
+	int index = -1;
+	for (int i = 0; i < s_proxyCount; i++) if (s_proxies[i].id == s_gripId) index = i;
+	if (index < 0) { s_gripId = 0; s_gripSpent = qtrue; return; }   // the creature is gone
+	if ((level.framenum % 3) == 0) ps->forcePower--;
+	if (ps->forcePower <= 0) { ps->forcePower = 0; s_gripId = 0; s_gripSpent = qtrue; return; }
+	float wire[3];
+	VO_DirToProxy(player, s_proxies[index], wire);
+	vo_link_send_actor_grip(&s_link, s_gripId, (float)powerLevel / (float)FORCE_LEVEL_3, wire);
 }
 
 // How the world is lit, for lighting Outcast's models: handed to the renderer through the cvar "vo_light".
@@ -473,7 +547,9 @@ void VO_Frame(void)
 				gi.SendConsoleCommand(instantCmd[n - 1]);
 				if (n == 1 || n == 2) VO_ForcePushProxies(ent, n == 2 ? qtrue : qfalse);
 				if (n == 4) VO_ForceMindTrickProxies(ent);
+				if (n == 5) VO_ForceHealProxies(ent);
 			}
+		VO_ForceGripProxies(ent, (s_input.buttons & VO_BUTTON_ABILITY(6)) ? qtrue : qfalse, (pressed & VO_BUTTON_ABILITY(6)) ? qtrue : qfalse);
 		}
 	}
 
@@ -497,6 +573,21 @@ void VO_Frame(void)
 				ent->client->ps.forcePowersKnown = (1 << NUM_FORCE_POWERS) - 1;
 				if (ent->client->ps.forcePowerMax <= 0) ent->client->ps.forcePowerMax = FORCE_POWER_MAX;
 				ent->client->ps.forcePower = ent->client->ps.forcePowerMax;
+				cmd[0] = 0;
+			} else if (s_weaponRequest == 15) {
+				Com_sprintf(cmd, sizeof(cmd), "saberAttackCycle\n");
+			} else if (s_weaponRequest == 16) {
+				Com_sprintf(cmd, sizeof(cmd), "forcenext\n");
+			} else if (s_weaponRequest == 17) {
+				Com_sprintf(cmd, sizeof(cmd), "forceprev\n");
+			} else if (s_weaponRequest == 18) {
+				// Use the selected power, as its F key would: the game does the use itself (BUTTON_USE_FORCE in VO_ForceButtons); push, pull,
+				// mind trick and heal also have to tell the world side.
+				const int selected = VO_SelectedForcePower();
+				if (selected == FP_PUSH || selected == FP_PULL) VO_ForcePushProxies(ent, selected == FP_PULL ? qtrue : qfalse);
+				else if (selected == FP_TELEPATHY) VO_ForceMindTrickProxies(ent);
+				else if (selected == FP_HEAL) VO_ForceHealProxies(ent);
+				s_useForcePending = qtrue;
 				cmd[0] = 0;
 			} else if (s_weaponRequest == 13) {
 				gi.cvar_set("cg_drawGun", "1");
@@ -669,6 +760,7 @@ void VO_ForceButtons(gentity_t *ent, usercmd_t *ucmd)
 	ucmd->buttons &= ~(BUTTON_FORCEGRIP | BUTTON_FORCE_LIGHTNING);
 	if (buttons & VO_BUTTON_ABILITY(6)) ucmd->buttons |= BUTTON_FORCEGRIP;
 	if (buttons & VO_BUTTON_ABILITY(7)) ucmd->buttons |= BUTTON_FORCE_LIGHTNING;
+	if (s_useForcePending) { ucmd->buttons |= BUTTON_USE_FORCE; s_useForcePending = qfalse; }
 }
 
 void VO_ModifyUserCmd(gentity_t *ent, usercmd_t *ucmd)

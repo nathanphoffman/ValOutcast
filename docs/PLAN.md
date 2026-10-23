@@ -45,7 +45,7 @@ Valheim plugin parts, controls and Valheim-specific lessons: `docs/worlds/valhei
 
 ## Controls
 
-WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **Right click with the saber out** throws it (hold to keep it out). **F1-F7** force powers (push, pull, speed, mind trick, heal, grip, lightning). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
+WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **Right click with the saber out** throws it (hold to keep it out). **F1-F7** force powers (push, pull, speed, mind trick, heal, grip, lightning). **V** saber style, **Z/X** previous/next power, **G** use the selected power. **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
 
 ## Debug switches (env)
 

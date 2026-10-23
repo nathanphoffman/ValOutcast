@@ -30,7 +30,7 @@ Shared connection code (`VoLink.cs`, `FrameReader.cs`) is in `worlds/common/`.
 
 ## Controls
 
-WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **F1-F7** force powers, as in Outcast (push, pull, speed, mind trick, heal, grip and lightning; hold F6/F7). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
+WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **F1-F7** force powers, as in Outcast (push, pull, speed, mind trick, heal, grip and lightning; hold F6/F7). **V** saber style, **Z** / **X** previous / next force power, **G** use the selected power. **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
 
 ## Lessons
 
@@ -43,7 +43,8 @@ WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned wea
 
 ## Known limits
 
-- Mind trick (F4) at level 3 tames the creature you look at and makes it follow you (`Combat.Charm`, `Tuning.CharmMinStrength`). Lower levels do nothing on Valheim. Tamed creatures can still be shot or zapped by you.
+- Mind trick (F4): level 3 tames the creature you look at and makes it follow you (`Combat.Charm`, `Tuning.CharmMinStrength`); levels 1 and 2 make it lose interest for 6 or 20 s (`ForcePowers.Calm`). Tamed creatures take no damage from your shots or lightning.
+- Grip (F6, hold): lifts the creature you looked at when you pressed, holds it and stops it acting; from level 2 it also hurts (`ForcePowers`, `Tuning.Grip*`). Heal (F5) also heals tame creatures nearby (`Tuning.HealFraction`); Valheim's own health bar is not used (Outcast health is the player's). A lit lightsaber turns projectiles that come within `Tuning.SaberBlockRadius` back at their owner. None of this has been tried in the real game.
 - Force push and pull move creatures through `ActorPush` and `Character.ApplyPushback`; the strength is `Tuning.ForcePushForce` and has not been tuned in the real game. Lightning damages creatures (about 10 per hit in tests). Push and pull also move loose items on the ground (up to `Tuning.ItemRange` away, speed `Tuning.ItemPushSpeed`); `CreatureStreamer` sends them as loose actors. Lightning does not hurt items, and nothing here affects trees or rocks.
 - Tool mode copies only meshes, so bows, torch flames and shields may look wrong.
 - Only 2 of 13 weapons are craftable items; ammo is not crafted. Crafted items drop as flint.

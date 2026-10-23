@@ -516,6 +516,22 @@ index 2790dc8..6242832 100644
  	"${JK2SPDir}/game/g_mem.cpp"
  	"${JK2SPDir}/game/g_misc.cpp"
  	"${JK2SPDir}/game/g_misc_model.cpp"
+diff --git a/codeJK2/game/bg_pmove.cpp b/codeJK2/game/bg_pmove.cpp
+index 964cfce..907b1f1 100644
+--- a/codeJK2/game/bg_pmove.cpp
++++ b/codeJK2/game/bg_pmove.cpp
+@@ -8387,6 +8387,11 @@ static void PM_Inventory(void)
+ */
+ }
+ 
++int VO_SelectedForcePower( void )
++{
++	return showPowers[cg.forcepowerSelect];
++}
++
+ extern void ForceThrow( gentity_t *self, qboolean pull );
+ extern void ForceHeal( gentity_t *self );
+ extern void ForceTelepathy( gentity_t *self );
 diff --git a/codeJK2/game/g_active.cpp b/codeJK2/game/g_active.cpp
 index 7b4f4cd..9dc57bc 100644
 --- a/codeJK2/game/g_active.cpp
