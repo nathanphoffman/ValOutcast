@@ -14,6 +14,8 @@ namespace ValOutcast
         /// <summary>Valheim push force of a full strength force push or pull on a creature (a sword hit uses about 20-60). Tune this.</summary>
         public const float ForcePushForce = 150f;
         /// <summary>Items on the ground are sent to the player side so they can be pushed and pulled: how far (m), and the most sent at once.</summary>
+        /// <summary>Mind trick strength (the force level divided by 3) needed to tame a creature: 1 means level 3 only.</summary>
+        public const float CharmMinStrength = 0.99f;
         public const float ItemRange = 18f;
         public const int MaxActors = 48;
         /// <summary>Speed (m/s) given to a loose item by a full strength push or pull, plus a small upward hop so it does not stick.</summary>

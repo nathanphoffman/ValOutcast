@@ -223,6 +223,47 @@ static void VO_ForcePushProxies(gentity_t *player, qboolean pull)
 	}
 }
 
+// Mind trick. The game's own version only works on its own characters, so the creature you look at is reported (ActorCharm)
+// with the power's level as the strength, and the world side decides what that does.
+static void VO_ForceMindTrickProxies(gentity_t *player)
+{
+	playerState_t *ps = &player->client->ps;
+	const int powerLevel = ps->forcePowerLevel[FP_TELEPATHY];
+	if (!(ps->forcePowersKnown & (1 << FP_TELEPATHY)) || powerLevel <= 0 || (ps->forcePowersActive & (1 << FP_TELEPATHY))) return;
+	if (ps->forcePower < forcePowerNeeded[FP_TELEPATHY]) return;
+
+	vec3_t forward, eye;
+	AngleVectors(ps->viewangles, forward, NULL, NULL);
+	VectorCopy(player->currentOrigin, eye);
+	eye[2] += ps->viewheight;
+
+	int best = -1;
+	float bestDot = 0.95f;   // about 18 degrees from where you look
+	for (int i = 0; i < s_proxyCount; i++) {
+		if (s_proxies[i].loose) continue;
+		gentity_t *ent = s_proxies[i].ent;
+		vec3_t center, to;
+		VectorCopy(ent->currentOrigin, center);
+		center[2] += ent->maxs[2] * 0.5f;
+		VectorSubtract(center, eye, to);
+		const float dist = VectorNormalize(to);
+		if (dist > forcePushPullRadius[3] || dist < 1.0f) continue;
+		const float dot = DotProduct(to, forward);
+		if (dot > bestDot) { bestDot = dot; best = i; }
+	}
+	if (best < 0) return;
+
+	vec3_t flat;
+	VectorSubtract(s_proxies[best].ent->currentOrigin, player->currentOrigin, flat);
+	flat[2] = 0.0f;
+	VectorNormalize(flat);
+	float wire[3];
+	VO_ToWire(flat, wire, 1.0f);
+	const float strength = (float)powerLevel / (float)FORCE_LEVEL_3;
+	if (getenv("VO_DEBUG_FORCE")) gi.Printf("ValOutcast: mind trick on creature %u, strength %.2f\n", (unsigned)s_proxies[best].id, strength);
+	vo_link_send_actor_charm(&s_link, s_proxies[best].id, strength, wire);
+}
+
 // How the world is lit, for lighting Outcast's models: handed to the renderer through the cvar "vo_light".
 static int VO_Clamp255(float v)
 {
@@ -412,13 +453,26 @@ void VO_Frame(void)
 		const uint32_t pressed = down & ~s_abilityPrev;
 		s_abilityPrev = s_input.buttons;
 		if (s_active && getenv("VO_DEBUG_FORCE") && (level.framenum % 20) == 0) {
-			gi.Printf("ValOutcast: force pool %d/%d, known %x, active %x\n", ent->client->ps.forcePower, ent->client->ps.forcePowerMax, ent->client->ps.forcePowersKnown, ent->client->ps.forcePowersActive);
+			gi.Printf("ValOutcast: force pool %d/%d, known %x, active %x, saber in flight %d, weapon %d\n", ent->client->ps.forcePower, ent->client->ps.forcePowerMax, ent->client->ps.forcePowersKnown, ent->client->ps.forcePowersActive, (int)ent->client->ps.saberInFlight, (int)ent->client->ps.weapon);
+		}
+		if (s_active && getenv("VO_DEBUG_FORCE") && ent->client->ps.saberInFlight && (level.framenum % 20) == 0) {
+			const int se = ent->client->ps.saberEntityNum;
+			if (se > 0 && se < ENTITYNUM_WORLD) {
+				gentity_t *sab = &g_entities[se];
+				float nearest = -1.0f;
+				for (int i = 0; i < s_proxyCount; i++) {
+					const float d = Distance(sab->currentOrigin, s_proxies[i].ent->currentOrigin);
+					if (nearest < 0.0f || d < nearest) nearest = d;
+				}
+				gi.Printf("ValOutcast: saber at %.0f %.0f %.0f (player %.0f %.0f %.0f), state %d, nearest creature %.0f units, muzzle %.0f %.0f %.0f len %.0f\n", sab->currentOrigin[0], sab->currentOrigin[1], sab->currentOrigin[2], ent->currentOrigin[0], ent->currentOrigin[1], ent->currentOrigin[2], (int)ent->client->ps.saberEntityState, nearest, ent->client->renderInfo.muzzlePoint[0], ent->client->renderInfo.muzzlePoint[1], ent->client->renderInfo.muzzlePoint[2], (float)ent->client->ps.saberLength);
+			}
 		}
 		if (s_active) {
 			for (int n = 1; n <= 5; n++) {
 				if (!(pressed & VO_BUTTON_ABILITY(n))) continue;
 				gi.SendConsoleCommand(instantCmd[n - 1]);
 				if (n == 1 || n == 2) VO_ForcePushProxies(ent, n == 2 ? qtrue : qfalse);
+				if (n == 4) VO_ForceMindTrickProxies(ent);
 			}
 		}
 	}
@@ -606,6 +660,12 @@ void VO_ForceButtons(gentity_t *ent, usercmd_t *ucmd)
 {
 	if (!s_open || !s_active || !s_inputLive || ent->s.number != 0 || !ent->client) return;
 	const uint32_t buttons = s_input.buttons | s_buttonLatch;
+	// The attack buttons are set here as well as in VO_ModifyUserCmd: the saber throw (alt attack) and the force powers read them
+	// before that point in the frame.
+	ucmd->buttons &= ~(BUTTON_ATTACK | BUTTON_ALT_ATTACK | BUTTON_USE);
+	if (buttons & VO_BUTTON_ATTACK) ucmd->buttons |= BUTTON_ATTACK;
+	if (buttons & VO_BUTTON_ALT_ATTACK) ucmd->buttons |= BUTTON_ALT_ATTACK;
+	if (buttons & VO_BUTTON_USE) ucmd->buttons |= BUTTON_USE;
 	ucmd->buttons &= ~(BUTTON_FORCEGRIP | BUTTON_FORCE_LIGHTNING);
 	if (buttons & VO_BUTTON_ABILITY(6)) ucmd->buttons |= BUTTON_FORCEGRIP;
 	if (buttons & VO_BUTTON_ABILITY(7)) ucmd->buttons |= BUTTON_FORCE_LIGHTNING;

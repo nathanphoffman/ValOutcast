@@ -25,6 +25,7 @@ extern "C" {
 #define VO_MSG_PLAYER_LIGHT 13
 #define VO_MSG_LOADOUT 14
 #define VO_MSG_ACTOR_PUSH 15
+#define VO_MSG_ACTOR_CHARM 16
 #define VO_BUTTON_ATTACK 1
 #define VO_BUTTON_ALT_ATTACK 2
 #define VO_BUTTON_USE 4
@@ -117,6 +118,11 @@ int vo_decode_world_context(const uint8_t *payload, int len, vo_world *w);
  * player side's full push; the world side scales it), direction (unit vector, wire space) the creature should move. 28 bytes. */
 int vo_encode_actor_push(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
 void vo_link_send_actor_push(vo_link *link, uint32_t id, float strength, const float dir[3]);
+
+/* ActorCharm: the player side used a mind power on a creature (Outcast: mind trick). Same layout as HitActor: id, strength 0 to 1
+ * (1 = the most the player side can do; the world side decides what that means), direction from the player to the creature. 28 bytes. */
+int vo_encode_actor_charm(uint8_t *out, uint32_t seq, uint32_t id, float strength, const float dir[3]);
+void vo_link_send_actor_charm(vo_link *link, uint32_t id, float strength, const float dir[3]);
 
 /* Sends a HitActor if connected. */
 void vo_link_send_hit_actor(vo_link *link, uint32_t id, float damage, const float dir[3]);

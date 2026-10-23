@@ -9,7 +9,9 @@ Options: --walk   send Input (walk forward, slowly turning) as if the Valheim wi
          --turn   turn slowly in place (use with --fire to check where shots go as the view turns)
          --fire   hold the primary attack button
          --alt    hold the alternate attack button
-         --weapon N  pick weapon slot N (1 is the lightsaber) a few seconds after starting (14 = the cheat: everything)
+         --altpulse  (with --weapon 14,1 for the saber throw) press the alternate attack for 3 s every 8 s from 12 s on (the saber throw needs a fresh press)
+         --weapon N[,N...]  pick weapon slot N (several, separated by commas, are sent 2 s apart) (1 is the lightsaber) a few seconds after starting (14 = the cheat: everything)
+         --ahead  add one still creature 3 m straight ahead of the start (for mind trick and push tests)
          --item   add a loose item 2 m ahead of the start (push or pull it with --power 1 or 2)
          --power N  press ability N (1 to 7: push, pull, speed, mind trick, heal, grip, lightning) for 1 s every 4 s, from 6 s on
          --dark   send a dim, bluish world light (night) instead of bright daylight
@@ -35,6 +37,7 @@ WALK = "--walk" in sys.argv
 TURN = "--turn" in sys.argv
 NOACTORS = "--noactors" in sys.argv
 ITEM = "--item" in sys.argv
+AHEAD = "--ahead" in sys.argv
 NEAR = "--near" in sys.argv
 TURN_RATE = float(sys.argv[sys.argv.index("--turnrate") + 1]) if "--turnrate" in sys.argv else 0.5
 NOWALL = "--nowall" in sys.argv
@@ -44,8 +47,9 @@ HURT = "--hurt" in sys.argv
 FIRE = "--fire" in sys.argv
 DARK = "--dark" in sys.argv
 ALT = "--alt" in sys.argv
+ALTPULSE = "--altpulse" in sys.argv
 POWER = int(sys.argv[sys.argv.index("--power") + 1]) if "--power" in sys.argv else 0
-WEAPON = int(sys.argv[sys.argv.index("--weapon") + 1]) if "--weapon" in sys.argv else 0
+WEAPONS = [int(w) for w in sys.argv[sys.argv.index("--weapon") + 1].split(",")] if "--weapon" in sys.argv else []
 
 
 def build_chunk(cx, cz, ax, ay, az):
@@ -73,6 +77,8 @@ def send_actors(link, ax, ay, az, t):
     """Two creatures wandering in small circles near the start."""
     if ITEM:
         link.send_raw(lambda seq: vo.encode_actor_upsert(seq, 200, (ax, ay, az + 2.0), 0.2, 0.4, 255, vo.ACTOR_LOOSE))
+    if AHEAD:
+        link.send_raw(lambda seq: vo.encode_actor_upsert(seq, 300, (ax, ay, az + 3.0), 0.5, 1.8, 255, vo.ACTOR_HOSTILE))
     if NOACTORS:
         return
     for n, (dx, dz) in enumerate(((1.2, -0.9), (-1.2, 1.0)) if NEAR else ((3.0, -2.0), (-3.0, 2.5))):
@@ -90,7 +96,7 @@ last_hurt = time.time()
 last_input = 0
 last_light = 0
 started_at = None
-weapon_sent = False
+weapons_sent = 0
 last_print = 0
 last_field = 0
 try:
@@ -108,9 +114,11 @@ try:
             buttons = (vo.BUTTON_ATTACK if FIRE else 0) | (vo.BUTTON_ALT_ATTACK if ALT else 0)
             if POWER and started_at is not None and now - started_at > 6 and (now - started_at - 6) % 4 < 1:
                 buttons |= vo.button_ability(POWER)
+            if ALTPULSE and started_at is not None and now - started_at > 12 and (now - started_at - 12) % 8 < 3:
+                buttons |= vo.BUTTON_ALT_ATTACK
             weapon = 0
-            if WEAPON and started_at is not None and now - started_at > 4 and not weapon_sent:
-                weapon, weapon_sent = WEAPON, True
+            if weapons_sent < len(WEAPONS) and started_at is not None and now - started_at > 4 + 2 * weapons_sent:
+                weapon, weapons_sent = WEAPONS[weapons_sent], weapons_sent + 1
             link.send_raw(lambda seq: vo.encode_input(seq, buttons, forward, 0.0, 0.0, yaw, 0.0, weapon))
         if now - last_light > 0.25:
             last_light = now
@@ -150,6 +158,8 @@ try:
                 print("[fake_world] HitActor id=%d damage=%.0f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
             if kind == vo.MSG_ACTOR_PUSH:
                 print("[fake_world] ActorPush id=%d strength=%.2f dir=(%.2f, %.2f, %.2f)" % (value[0], value[1], *value[2]), flush=True)
+            if kind == vo.MSG_ACTOR_CHARM:
+                print("[fake_world] ActorCharm id=%d strength=%.2f" % (value[0], value[1]), flush=True)
             if kind == vo.MSG_HIT_WORLD:
                 print("[fake_world] HitWorld kind=%d damage=%.0f at (%.2f, %.2f, %.2f)" % (value[3], value[2], *value[0]), flush=True)
         link.inbox.clear()

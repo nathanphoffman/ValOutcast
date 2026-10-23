@@ -45,7 +45,7 @@ Valheim plugin parts, controls and Valheim-specific lessons: `docs/worlds/valhei
 
 ## Controls
 
-WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **F1-F7** force powers (push, pull, speed, mind trick, heal, grip, lightning). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
+WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned weapons. **Right click with the saber out** throws it (hold to keep it out). **F1-F7** force powers (push, pull, speed, mind trick, heal, grip, lightning). **R** tool mode (Valheim's own items). **E** use. **Tab** inventory. **F8** spawn boar. Cheat: chat `valleyofthejedi`. Config: `BepInEx/config/com.valoutcast.bridge.cfg`.
 
 ## Debug switches (env)
 
@@ -68,6 +68,7 @@ WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned wea
 13. Valheim menus close when they see the Use key go down; `Interactor` calls `ZInput.ResetButtonStatus("Use")` after `Interact`.
 14. Client game code (`codeJK2/cgame`) is built into `jospgamex86_64.so`, not the exe. Check its timestamp after edits, and ask the user to restart.
 15. Linux only (mmap, /dev/shm).
+16. Outcast reads some buttons early in the frame (saber throw, force powers) and the rest in pmove, so `VO_ForceButtons` sets the buttons before the force update. The hidden-level filter in `cg_ents.cpp` must not hide the player's thrown saber, or its blade never moves and does no damage.
 
 ## Status (2026-10-22)
 

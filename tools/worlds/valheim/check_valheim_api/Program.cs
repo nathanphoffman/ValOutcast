@@ -53,6 +53,7 @@ class Program
         // Harmony patches
         Method("Player", "OnSpawned"); Method("Chat", "SendText");
         Method("ObjectDB", "Awake"); Method("ObjectDB", "CopyOtherDB"); Method("ObjectDB", "UpdateRegisters"); Method("ZNetScene", "Awake");
+        Method("Tameable", "Tame", 0); Method("Character", "SetTamed", 1); Method("MonsterAI", "SetFollowTarget", 1);
         Field("ItemDrop", "s_instances"); Field("ItemDrop", "m_nview");
         Field("ObjectDB", "m_items"); Field("ObjectDB", "m_recipes"); Field("ZNetScene", "m_namedPrefabs"); Field("Player", "m_customData");
         Method("Player", "FixedUpdate", 0);

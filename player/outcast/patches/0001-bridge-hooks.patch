@@ -315,10 +315,10 @@ index d0a0df6..6b9eaf7 100644
  	{
  		if (cg.predicted_player_state.pm_type != PM_DEAD)
 diff --git a/codeJK2/cgame/cg_ents.cpp b/codeJK2/cgame/cg_ents.cpp
-index bad8c73..4b00000 100644
+index bad8c73..f530e74 100644
 --- a/codeJK2/cgame/cg_ents.cpp
 +++ b/codeJK2/cgame/cg_ents.cpp
-@@ -2073,12 +2073,30 @@ CG_AddCEntity
+@@ -2073,12 +2073,33 @@ CG_AddCEntity
  
  ===============
  */
@@ -329,6 +329,9 @@ index bad8c73..4b00000 100644
 +	static int overlay = -1;
 +	if ( overlay < 0 ) overlay = getenv( "VO_OVERLAY" ) ? 1 : 0;
 +	if ( !overlay || cent->currentState.number == 0 ) return qfalse;
++	// The player's own thrown lightsaber is one of these entities: it has to be drawn (and its blade updated, which is what
++	// damages things), or the throw does nothing.
++	if ( cent->gent && cent->gent->owner == &g_entities[0] && !Q_stricmp( cent->gent->classname, "lightsaber" ) ) return qfalse;
 +	switch ( cent->currentState.eType ) {
 +	case ET_PLAYER: case ET_ITEM: case ET_MOVER: case ET_GENERAL: case ET_THINKER: case ET_CLOUD:
 +		return qtrue;

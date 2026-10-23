@@ -43,6 +43,7 @@ WASD, mouse, jump, crouch, clicks drive Outcast. Keys 1-8 / wheel pick owned wea
 
 ## Known limits
 
+- Mind trick (F4) at level 3 tames the creature you look at and makes it follow you (`Combat.Charm`, `Tuning.CharmMinStrength`). Lower levels do nothing on Valheim. Tamed creatures can still be shot or zapped by you.
 - Force push and pull move creatures through `ActorPush` and `Character.ApplyPushback`; the strength is `Tuning.ForcePushForce` and has not been tuned in the real game. Lightning damages creatures (about 10 per hit in tests). Push and pull also move loose items on the ground (up to `Tuning.ItemRange` away, speed `Tuning.ItemPushSpeed`); `CreatureStreamer` sends them as loose actors. Lightning does not hurt items, and nothing here affects trees or rocks.
 - Tool mode copies only meshes, so bows, torch flames and shields may look wrong.
 - Only 2 of 13 weapons are craftable items; ammo is not crafted. Crafted items drop as flint.

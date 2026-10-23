@@ -55,6 +55,7 @@ class Program
         Check(VoLink.DecodeHitWorld(worldBytes, worldBytes.Length, out var worldMsg) && worldMsg.PosZ == 3f && worldMsg.DirZ == -1f && worldMsg.Damage == 25f && worldMsg.Kind == 1, "hit_world decode");
         Check(!VoLink.DecodeHitWorld(worldBytes, 20, out _), "hit_world short");
         Check(VoLink.EncodeActorPush(15, 7, 0.5f, new float[] { 0, 0, -1 }).AsSpan().SequenceEqual(Golden("actor_push")), "actor_push bytes");
+        Check(VoLink.EncodeActorCharm(16, 7, 1.0f, new float[] { 0, 0, -1 }).AsSpan().SequenceEqual(Golden("actor_charm")), "actor_charm bytes");
         var hitBytes = Golden("hit_actor");
         Check(VoLink.DecodeHitActor(hitBytes, hitBytes.Length, out var hitMsg) && hitMsg.Id == 7 && hitMsg.Damage == 25f && hitMsg.DirZ == -1f, "hit_actor decode");
         Check(!VoLink.DecodeHitActor(hitBytes, 10, out _), "hit_actor short");

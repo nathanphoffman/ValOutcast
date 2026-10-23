@@ -17,6 +17,8 @@ namespace ValOutcast
         private static readonly System.Reflection.FieldInfo ItemInstancesField = AccessTools.Field(typeof(ItemDrop), "s_instances");
         private static readonly AccessTools.FieldRef<ItemDrop, ZNetView> ItemView = AccessTools.FieldRefAccess<ItemDrop, ZNetView>("m_nview");
 
+        private static readonly System.Reflection.MethodInfo TameMethod = AccessTools.Method(typeof(Tameable), "Tame");
+
         private static List<ItemDrop> ItemInstances()
         {
             return ItemInstancesField.GetValue(null) as List<ItemDrop> ?? new List<ItemDrop>();
@@ -39,6 +41,7 @@ namespace ValOutcast
                 _sentNow.Clear();
                 link.HitActors.Clear();
                 link.ActorPushes.Clear();
+                link.ActorCharms.Clear();
                 return;
             }
 
@@ -104,6 +107,18 @@ namespace ValOutcast
             _sentCount = seen.Count;
         }
 
+        /// <summary>Makes the creature tame and has it follow the player. Creatures with no taming of their own are tamed the same way.</summary>
+        private static void Charm(Character animal, Player player)
+        {
+            if (animal.IsTamed()) return;
+            var tameable = animal.GetComponent<Tameable>();
+            if (tameable != null) TameMethod.Invoke(tameable, null);
+            else animal.SetTamed(true);
+            var ai = animal.GetComponent<MonsterAI>();
+            if (ai != null) ai.SetFollowTarget(player.gameObject);
+            Plugin.LogMessage("mind trick: " + animal.m_name + " is tamed and follows you" + (animal.IsTamed() ? "" : " (taming failed)"));
+        }
+
         /// <summary>Force push or pull on an item lying on the ground: a speed change plus a small hop, so it slides or rolls free.</summary>
         private static void PushItem(ItemDrop drop, Vector3 dir, float strength)
         {
@@ -118,6 +133,15 @@ namespace ValOutcast
 
         private void ApplyHits(VoLink link, Player player)
         {
+            // Mind trick: at full strength (level 3) the creature is tamed and follows the player.
+            while (link.ActorCharms.Count > 0)
+            {
+                VoLink.HitActorMsg charm = link.ActorCharms.Dequeue();
+                if (charm.Damage < Tuning.CharmMinStrength) continue;   // Damage holds the strength here
+                if (!_byId.TryGetValue(charm.Id, out Character animal) || animal == null || animal.IsDead() || animal.IsPlayer()) continue;
+                Charm(animal, player);
+            }
+
             // Force push and pull: the player side says which creatures it moved and which way.
             while (link.ActorPushes.Count > 0)
             {
