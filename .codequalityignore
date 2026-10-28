@@ -1,0 +1,5 @@
+# Test vectors are literal bytes and values on purpose.
+*test_vo_link.c RULE-07
+*test_protocol.py RULE-07
+csharp_test RULE-07
+*make_golden.py RULE-07

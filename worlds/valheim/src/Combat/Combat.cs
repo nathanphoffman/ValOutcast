@@ -23,6 +23,7 @@ namespace ValOutcast
         {
             return ItemInstancesField.GetValue(null) as List<ItemDrop> ?? new List<ItemDrop>();
         }
+
         private readonly HashSet<uint> _sentNow = new HashSet<uint>();
         private readonly List<uint> _gone = new List<uint>();
         private readonly ForcePowers _force = new ForcePowers();
@@ -34,8 +35,9 @@ namespace ValOutcast
         {
             if (link == null) return;
             Player player = Player.m_localPlayer;
-            bool on = link.Connected && PlayerFollow.Active && PlayerFollow.Anchored && player != null;
-            if (!on)
+            bool enabled = link.Connected && PlayerFollow.Active && PlayerFollow.Anchored && player != null;
+
+            if (!enabled)
             {
                 _byId.Clear();
                 _items.Clear();
@@ -46,6 +48,7 @@ namespace ValOutcast
                 link.ActorGrips.Clear();
                 link.ActorHeals.Clear();
                 _force.Release();
+
                 return;
             }
 
@@ -63,52 +66,60 @@ namespace ValOutcast
 
             var seen = new HashSet<uint>();
             Vector3 center = player.transform.position;
-            var pos = new float[3];
-            foreach (Character c in Character.GetAllCharacters())
+            var position = new float[3];
+
+            foreach (Character creature in Character.GetAllCharacters())
             {
-                if (c == null || c.IsPlayer() || c.IsDead()) continue;
-                if ((c.transform.position - center).sqrMagnitude > Tuning.CreatureRange * Tuning.CreatureRange) continue;
+                if (creature == null || creature.IsPlayer() || creature.IsDead()) continue;
 
-                uint id = (uint)c.GetInstanceID();
-                seen.Add(id);
-                _byId[id] = c;
+                if ((creature.transform.position - center).sqrMagnitude > Tuning.CreatureRange * Tuning.CreatureRange) continue;
 
-                Vector3 wire = PlayerFollow.WorldToWire(c.transform.position);
-                pos[0] = wire.x; pos[1] = wire.y; pos[2] = wire.z;
-                float radius = Mathf.Max(0.2f, c.GetRadius());
-                float height = Mathf.Max(0.5f, c.GetHeight());
-                byte hp = (byte)Mathf.Clamp(Mathf.RoundToInt(c.GetHealthPercentage() * 255f), 0, 255);
-                byte flags = (!c.IsTamed() && BaseAI.IsEnemy(c, player)) ? VoLink.ActorHostile : (byte)0;
-                link.SendActorUpsert(id, pos, radius, height, hp, flags);
+                uint creatureId = (uint)creature.GetInstanceID();
+                seen.Add(creatureId);
+                _byId[creatureId] = creature;
+
+                Vector3 wire = PlayerFollow.WorldToWire(creature.transform.position);
+                position[0] = wire.x; position[1] = wire.y; position[2] = wire.z;
+                float radius = Mathf.Max(0.2f, creature.GetRadius());
+                float height = Mathf.Max(0.5f, creature.GetHeight());
+                byte healthPercent = (byte)Mathf.Clamp(Mathf.RoundToInt(creature.GetHealthPercentage() * 255f), 0, 255);
+                byte flags = (!creature.IsTamed() && BaseAI.IsEnemy(creature, player)) ? VoLink.ActorHostile : (byte)0;
+                link.SendActorUpsert(creatureId, position, radius, height, healthPercent, flags);
             }
 
             foreach (ItemDrop drop in ItemInstances())
             {
                 if (drop == null || seen.Count >= Tuning.MaxActors) continue;
                 var body = drop.GetComponent<Rigidbody>();
+
                 if (body == null || body.isKinematic) continue;
+
                 if ((drop.transform.position - center).sqrMagnitude > Tuning.ItemRange * Tuning.ItemRange) continue;
 
-                uint id = (uint)drop.gameObject.GetInstanceID();
-                seen.Add(id);
-                _items[id] = drop;
+                uint creatureId = (uint)drop.gameObject.GetInstanceID();
+                seen.Add(creatureId);
+                _items[creatureId] = drop;
 
                 Vector3 wire = PlayerFollow.WorldToWire(drop.transform.position);
-                pos[0] = wire.x; pos[1] = wire.y; pos[2] = wire.z;
-                link.SendActorUpsert(id, pos, 0.2f, 0.4f, 255, VoLink.ActorLoose);
+                position[0] = wire.x; position[1] = wire.y; position[2] = wire.z;
+                link.SendActorUpsert(creatureId, position, 0.2f, 0.4f, 255, VoLink.ActorLoose);
             }
 
             // Tell the player side about creatures that left range or died.
             _gone.Clear();
-            foreach (uint id in _sentNow) if (!seen.Contains(id)) _gone.Add(id);
-            foreach (uint id in _gone)
+
+            foreach (uint creatureId in _sentNow) if (!seen.Contains(creatureId)) _gone.Add(creatureId);
+
+            foreach (uint creatureId in _gone)
             {
-                link.SendActorRemove(id);
-                _byId.Remove(id);
-                _items.Remove(id);
+                link.SendActorRemove(creatureId);
+                _byId.Remove(creatureId);
+                _items.Remove(creatureId);
             }
+
             _sentNow.Clear();
-            foreach (uint id in seen) _sentNow.Add(id);
+
+            foreach (uint creatureId in seen) _sentNow.Add(creatureId);
             _sentCount = seen.Count;
         }
 
@@ -117,22 +128,26 @@ namespace ValOutcast
         {
             if (animal.IsTamed()) return;
             var tameable = animal.GetComponent<Tameable>();
+
             if (tameable != null) TameMethod.Invoke(tameable, null);
             else animal.SetTamed(true);
-            var ai = animal.GetComponent<MonsterAI>();
-            if (ai != null) ai.SetFollowTarget(player.gameObject);
+            var monsterAi = animal.GetComponent<MonsterAI>();
+
+            if (monsterAi != null) monsterAi.SetFollowTarget(player.gameObject);
             Plugin.LogMessage("mind trick: " + animal.m_name + " is tamed and follows you" + (animal.IsTamed() ? "" : " (taming failed)"));
         }
 
         /// <summary>Force push or pull on an item lying on the ground: a speed change plus a small hop, so it slides or rolls free.</summary>
-        private static void PushItem(ItemDrop drop, Vector3 dir, float strength)
+        private static void PushItem(ItemDrop drop, Vector3 direction, float strength)
         {
             var body = drop.GetComponent<Rigidbody>();
+
             if (body == null) return;
             ZNetView view = ItemView(drop);
+
             if (view != null && view.IsValid() && !view.IsOwner()) view.ClaimOwnership();
             body.WakeUp();
-            body.AddForce(dir * (Tuning.ItemPushSpeed * strength) + Vector3.up * (Tuning.ItemPushHop * strength), ForceMode.VelocityChange);
+            body.AddForce(direction * (Tuning.ItemPushSpeed * strength) + Vector3.up * (Tuning.ItemPushHop * strength), ForceMode.VelocityChange);
             Plugin.LogMessage("force push on item " + drop.name + ", strength " + strength.ToString("0.00"));
         }
 
@@ -142,61 +157,70 @@ namespace ValOutcast
             while (link.ActorCharms.Count > 0)
             {
                 VoLink.HitActorMsg charm = link.ActorCharms.Dequeue();
-                if (!_byId.TryGetValue(charm.Id, out Character animal) || animal == null || animal.IsDead() || animal.IsPlayer()) continue;
+
+                if (!_byId.TryGetValue(charm.ActorId, out Character animal) || animal == null || animal.IsDead() || animal.IsPlayer()) continue;
+
                 // Damage holds the strength here: levels 1 and 2 only calm the creature.
-                if (charm.Damage < Tuning.CharmMinStrength) _force.Calm(charm.Id, animal, charm.Damage);
+                if (charm.Damage < Tuning.CharmMinStrength) _force.Calm(charm.ActorId, animal, charm.Damage);
                 else Charm(animal, player);
             }
 
             while (link.ActorGrips.Count > 0)
             {
                 VoLink.HitActorMsg grip = link.ActorGrips.Dequeue();
-                if (_byId.TryGetValue(grip.Id, out Character held) && held != null && !held.IsDead() && !held.IsPlayer()) _force.Grip(grip.Id, held, grip.Damage, player);
+
+                if (_byId.TryGetValue(grip.ActorId, out Character held) && held != null && !held.IsDead() && !held.IsPlayer()) _force.Grip(grip.ActorId, held, grip.Damage, player);
             }
 
             while (link.ActorHeals.Count > 0)
             {
                 VoLink.HitActorMsg heal = link.ActorHeals.Dequeue();
-                if (_byId.TryGetValue(heal.Id, out Character friend) && friend != null && !friend.IsDead() && !friend.IsPlayer()) _force.Heal(friend, heal.Damage);
+
+                if (_byId.TryGetValue(heal.ActorId, out Character friend) && friend != null && !friend.IsDead() && !friend.IsPlayer()) _force.Heal(friend, heal.Damage);
             }
 
             // Force push and pull: the player side says which creatures it moved and which way.
             while (link.ActorPushes.Count > 0)
             {
                 VoLink.HitActorMsg push = link.ActorPushes.Dequeue();
-                var dir = new Vector3(push.DirX, push.DirY, -push.DirZ).normalized; // wire to Unity: flip Z
-                if (_items.TryGetValue(push.Id, out ItemDrop drop) && drop != null)
+                var direction = new Vector3(push.DirX, push.DirY, -push.DirZ).normalized; // wire to Unity: flip Z
+
+                if (_items.TryGetValue(push.ActorId, out ItemDrop drop) && drop != null)
                 {
-                    PushItem(drop, dir, push.Damage);   // Damage holds the strength here
+                    PushItem(drop, direction, push.Damage);   // Damage holds the strength here
+
                     continue;
                 }
-                if (!_byId.TryGetValue(push.Id, out Character mover) || mover == null || mover.IsDead()) continue;
-                mover.ApplyPushback(dir, Tuning.ForcePushForce * push.Damage);   // Damage holds the strength here
+
+                if (!_byId.TryGetValue(push.ActorId, out Character mover) || mover == null || mover.IsDead()) continue;
+                mover.ApplyPushback(direction, Tuning.ForcePushForce * push.Damage);   // Damage holds the strength here
                 Plugin.LogMessage("force push on " + mover.m_name + ", strength " + push.Damage.ToString("0.00"));
             }
 
             while (link.HitActors.Count > 0)
             {
-                VoLink.HitActorMsg msg = link.HitActors.Dequeue();
-                if (!_byId.TryGetValue(msg.Id, out Character target) || target == null || target.IsDead())
+                VoLink.HitActorMsg message = link.HitActors.Dequeue();
+
+                if (!_byId.TryGetValue(message.ActorId, out Character target) || target == null || target.IsDead())
                 {
                     _hitsUnknown++;
-                    Plugin.LogMessage("hit from Outcast for a creature that is not there (id " + msg.Id + ", damage " + msg.Damage.ToString("0") + ")");
+                    Plugin.LogMessage("hit from Outcast for a creature that is not there (id " + message.ActorId + ", damage " + message.Damage.ToString("0") + ")");
+
                     continue;
                 }
 
                 if (target.IsTamed()) continue;   // a creature you tamed is on your side: shots and lightning do not hurt it
 
-                var hit = new HitData();
-                hit.m_damage.m_slash = msg.Damage * Tuning.PlayerDamageToValheim;
-                hit.m_point = target.GetCenterPoint();
-                hit.m_dir = new Vector3(msg.DirX, msg.DirY, -msg.DirZ).normalized; // wire to Unity: flip Z
-                hit.m_pushForce = Tuning.CreaturePushForce;
-                hit.m_attacker = player.GetZDOID();
+                var hitMessage = new HitData();
+                hitMessage.m_damage.m_slash = message.Damage * Tuning.PlayerDamageToValheim;
+                hitMessage.m_point = target.GetCenterPoint();
+                hitMessage.m_dir = new Vector3(message.DirX, message.DirY, -message.DirZ).normalized; // wire to Unity: flip Z
+                hitMessage.m_pushForce = Tuning.CreaturePushForce;
+                hitMessage.m_attacker = player.GetZDOID();
                 float before = target.GetHealth();
-                target.Damage(hit);
+                target.Damage(hitMessage);
                 _hitsApplied++;
-                Plugin.LogMessage("hit applied to " + target.m_name + ": damage " + msg.Damage.ToString("0") + ", health " + before.ToString("0") + " -> " + target.GetHealth().ToString("0"));
+                Plugin.LogMessage("hit applied to " + target.m_name + ": damage " + message.Damage.ToString("0") + ", health " + before.ToString("0") + " -> " + target.GetHealth().ToString("0"));
             }
         }
     }
@@ -223,6 +247,7 @@ namespace ValOutcast
                 case HitData.HitType.Catapult:
                 case HitData.HitType.CinderFire:
                     return true;
+
                 default:
                     return false;
             }
@@ -234,16 +259,20 @@ namespace ValOutcast
 
             float damage = hit.GetTotalDamage();
             bool grace = Time.unscaledTime - PlayerFollow.AnchoredAt < Tuning.HurtGraceSeconds;
+
             if (grace || !Passes(hit.m_hitType))
             {
                 Plugin.LogMessage("damage ignored: " + damage.ToString("0") + " (" + hit.m_hitType + (grace ? ", just started" : "") + ")");
+
                 return false; // the Valheim stand-in takes no damage of its own either
             }
 
-            Vector3 dir = hit.m_dir;
+            Vector3 direction = hit.m_dir;
+
             // Unity to wire: flip Z.
-            Plugin.Link.SendPlayerHurt(damage, new[] { dir.x, dir.y, -dir.z }, 0);
+            Plugin.Link.SendPlayerHurt(damage, new[] { direction.x, direction.y, -direction.z }, 0);
             Plugin.LogMessage("damage sent to Outcast: " + damage.ToString("0") + " (" + hit.m_hitType + ")");
+
             return false;
         }
     }

@@ -14,10 +14,13 @@ namespace ValOutcast
         private static bool Prefix(string text)
         {
             if (text == null || text.Trim().ToLowerInvariant() != Code) return true;
+
             if (Plugin.Input == null || !PlayerFollow.Active) return true;   // Outcast is not driving: treat it as normal chat
             Plugin.Input.RequestGiveAll();
             Plugin.LogMessage("cheat: valleyofthejedi");
+
             if (Player.m_localPlayer != null) Player.m_localPlayer.Message(MessageHud.MessageType.Center, "The Force is with you");
+
             return false;
         }
     }

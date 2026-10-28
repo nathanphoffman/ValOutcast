@@ -4,7 +4,7 @@ import os
 import sys
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-sys.path.insert(0, os.path.join(root, "protocol"))
+sys.path.insert(0, os.path.join(root, "protocol", "python"))
 import vo_protocol as vo
 
 golden = {
@@ -22,7 +22,9 @@ golden = {
     "loadout": vo.encode_loadout(14, 0x2004),
     "world_context": vo.encode_world_context(11, (0.0, 0.8, 0.6), (1.0, 0.9, 0.5), (0.25, 0.5, 0.75)),
 }
+
 with open(os.path.join(root, "protocol", "golden.txt"), "w") as f:
     f.write("# name hex. Every implementation (Python, C, C#) must encode these exact bytes. Regenerate with tools/make_golden.py.\n")
+
     for name, packet in golden.items():
         f.write("%s %s\n" % (name, packet.hex()))

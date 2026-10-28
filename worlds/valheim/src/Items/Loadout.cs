@@ -9,9 +9,11 @@ namespace ValOutcast
         private const float SendInterval = 0.25f;
         private float _next;
 
+        // Tell the player side which weapons we own, at most once per SendInterval.
         public void Update(VoLink link)
         {
             if (link == null || !link.Connected || Player.m_localPlayer == null) return;
+
             if (UnityEngine.Time.unscaledTime < _next) return;
             _next = UnityEngine.Time.unscaledTime + SendInterval;
             link.SendLoadout(OutcastItems.OwnedWeapons(Player.m_localPlayer));

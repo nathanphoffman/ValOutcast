@@ -21,26 +21,31 @@ namespace ValOutcast
                 if (Time.unscaledTime >= _nextScan)
                 {
                     _nextScan = Time.unscaledTime + ScanSeconds;
+
                     // FindObjectsOfType does not return objects that are switched off, which is what the bars are after the first
                     // hide, so new ones are added to the list and the list is never emptied (or they could not be switched back on).
                     _bars.RemoveAll(b => b == null);
-                    foreach (HotkeyBar bar in Object.FindObjectsOfType<HotkeyBar>())
+
+                    foreach (HotkeyBar hotkeyBar in Object.FindObjectsOfType<HotkeyBar>())
                     {
-                        if (!_bars.Contains(bar)) _bars.Add(bar);
+                        if (!_bars.Contains(hotkeyBar)) _bars.Add(hotkeyBar);
                     }
                 }
-                foreach (HotkeyBar bar in _bars)
+
+                foreach (HotkeyBar hotkeyBar in _bars)
                 {
-                    if (bar != null && bar.gameObject.activeSelf) bar.gameObject.SetActive(false);
+                    if (hotkeyBar != null && hotkeyBar.gameObject.activeSelf) hotkeyBar.gameObject.SetActive(false);
                 }
+
                 _hidden = true;
             }
             else if (_hidden)
             {
-                foreach (HotkeyBar bar in _bars)
+                foreach (HotkeyBar hotkeyBar in _bars)
                 {
-                    if (bar != null) bar.gameObject.SetActive(true);
+                    if (hotkeyBar != null) hotkeyBar.gameObject.SetActive(true);
                 }
+
                 _hidden = false;
             }
         }

@@ -13,13 +13,16 @@ namespace ValOutcast
         private int _applied, _nothing;
         private float _nextReport;
 
+        // Apply queued world hits from the player side; drop them if we can't apply them yet.
         public void Update(VoLink link)
         {
             if (link == null) return;
             Player player = Player.m_localPlayer;
+
             if (!link.Connected || !PlayerFollow.Active || !PlayerFollow.Anchored || player == null)
             {
                 link.HitWorlds.Clear();
+
                 return;
             }
 
@@ -33,24 +36,27 @@ namespace ValOutcast
             }
         }
 
-        private void Apply(VoLink.HitWorldMsg msg, Player player)
+        private void Apply(VoLink.HitWorldMsg message, Player player)
         {
-            Vector3 point = PlayerFollow.WireToWorld(new Vector3(msg.PosX, msg.PosY, msg.PosZ));
-            Vector3 dir = new Vector3(msg.DirX, msg.DirY, -msg.DirZ).normalized; // wire to Unity: flip Z
+            Vector3 point = PlayerFollow.WireToWorld(new Vector3(message.PosX, message.PosY, message.PosZ));
+            Vector3 direction = new Vector3(message.DirX, message.DirY, -message.DirZ).normalized; // wire to Unity: flip Z
 
             IDestructible best = null;
             Collider bestCollider = null;
             float bestDistance = float.MaxValue;
-            foreach (Collider c in Physics.OverlapSphere(point, Tuning.WorldHitSearchRadius, ~0, QueryTriggerInteraction.Ignore))
+
+            foreach (Collider collider in Physics.OverlapSphere(point, Tuning.WorldHitSearchRadius, ~0, QueryTriggerInteraction.Ignore))
             {
-                IDestructible d = c.GetComponentInParent<IDestructible>();
+                IDestructible destructible = collider.GetComponentInParent<IDestructible>();
+
                 // Creatures are hit through their own boxes. Players' buildings are left alone: a stray shot should not wreck a base.
-                if (d == null || d is Character || d is WearNTear) continue;
-                float distance = (c.ClosestPoint(point) - point).sqrMagnitude;
+                if (destructible == null || destructible is Character || destructible is WearNTear) continue;
+                float distance = (collider.ClosestPoint(point) - point).sqrMagnitude;
+
                 if (distance < bestDistance)
                 {
-                    best = d;
-                    bestCollider = c;
+                    best = destructible;
+                    bestCollider = collider;
                     bestDistance = distance;
                 }
             }
@@ -58,22 +64,24 @@ namespace ValOutcast
             if (best == null)
             {
                 _nothing++;
+
                 return;
             }
 
-            var hit = new HitData();
+            var hitData = new HitData();
+
             // Not knowing what it is (tree, rock, ore), the blow counts as both an axe and a pickaxe; each thing takes the one it is weak to.
-            hit.m_damage.m_chop = msg.Damage;
-            hit.m_damage.m_pickaxe = msg.Damage;
-            hit.m_toolTier = Tuning.WorldHitToolTier;
-            hit.m_point = point;
-            hit.m_dir = dir;
-            hit.m_hitCollider = bestCollider;
-            hit.m_attacker = player.GetZDOID();
-            hit.m_hitType = HitData.HitType.PlayerHit;
-            best.Damage(hit);
+            hitData.m_damage.m_chop = message.Damage;
+            hitData.m_damage.m_pickaxe = message.Damage;
+            hitData.m_toolTier = Tuning.WorldHitToolTier;
+            hitData.m_point = point;
+            hitData.m_dir = direction;
+            hitData.m_hitCollider = bestCollider;
+            hitData.m_attacker = player.GetZDOID();
+            hitData.m_hitType = HitData.HitType.PlayerHit;
+            best.Damage(hitData);
             _applied++;
-            Plugin.LogMessage("world hit: " + (msg.Kind == 1 ? "lightsaber" : "shot") + " damaged " + bestCollider.transform.root.name + " for " + msg.Damage.ToString("0"));
+            Plugin.LogMessage("world hit: " + (message.Kind == 1 ? "lightsaber" : "shot") + " damaged " + bestCollider.transform.root.name + " for " + message.Damage.ToString("0"));
         }
     }
 }

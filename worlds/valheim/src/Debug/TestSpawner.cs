@@ -11,25 +11,31 @@ namespace ValOutcast
         private const string Prefab = "Boar";
         private const float Distance = 6f;
 
+        // Debug key F8: spawn a test creature a few metres in front of the player.
         public void Update()
         {
             if (!ZInput.GetKeyDown(KeyCode.F8)) return;
             Player player = Player.m_localPlayer;
+
             if (player == null || ZNetScene.instance == null) return;
 
             GameObject prefab = ZNetScene.instance.GetPrefab(Prefab);
+
             if (prefab == null)
             {
                 Plugin.LogMessage("test spawn: no prefab called " + Prefab);
+
                 return;
             }
 
             Vector3 forward = PlayerFollow.HasCurrent ? PlayerFollow.CurrentLook : player.transform.forward;
             forward.y = 0f;
+
             if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
-            Vector3 pos = player.transform.position + forward.normalized * Distance;
-            if (ZoneSystem.instance != null && ZoneSystem.instance.GetSolidHeight(pos, out float height)) pos.y = height + 0.1f;
-            Object.Instantiate(prefab, pos, Quaternion.LookRotation(-forward));
+            Vector3 position = player.transform.position + forward.normalized * Distance;
+
+            if (ZoneSystem.instance != null && ZoneSystem.instance.GetSolidHeight(position, out float height)) position.y = height + 0.1f;
+            Object.Instantiate(prefab, position, Quaternion.LookRotation(-forward));
             Plugin.LogMessage("test spawn: " + Prefab + " " + Distance + " m ahead");
         }
     }

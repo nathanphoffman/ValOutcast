@@ -37,14 +37,18 @@ namespace ValOutcast
             if (!PlayerFollow.Active || Player.m_localPlayer == null)
             {
                 _on = false;
+
                 return;
             }
+
             if (InputForwarder.MenuOpen() || !ZInput.GetKeyDown(Key)) return;
 
             _on = !_on;
             ToggledFrame = Time.frameCount;
             input.RequestWeapon(_on ? 12 : 13);   // tells Outcast to put its weapon away, or bring it back
             ItemDrop.ItemData held = Player.m_localPlayer.GetCurrentWeapon();
+
+            // Log line: shows on/off, and the held item's name when tool mode is on.
             Plugin.LogMessage("tool mode " + (_on ? "on: Valheim items (holding " + (held != null ? held.m_shared.m_name : "nothing") + ")" : "off: Outcast weapons"));
         }
     }

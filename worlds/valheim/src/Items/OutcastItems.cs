@@ -19,10 +19,11 @@ namespace ValOutcast
         private static readonly Dictionary<string, Sprite> Icons = new Dictionary<string, Sprite>();
 
         /// <summary>Adds our items and recipes to the ObjectDB. Safe to call again: it skips what is already there.</summary>
-        public static void Register(ObjectDB db)
+        public static void Register(ObjectDB objectDb)
         {
-            if (db == null || db.m_items == null || db.m_items.Count == 0) return;
-            GameObject template = db.m_items.FirstOrDefault(i => i != null && i.name == "Flint");
+            if (objectDb == null || objectDb.m_items == null || objectDb.m_items.Count == 0) return;
+            GameObject template = objectDb.m_items.FirstOrDefault(i => i != null && i.name == "Flint");
+
             if (template == null) return;
 
             if (_holder == null)
@@ -34,23 +35,29 @@ namespace ValOutcast
             }
 
             bool added = false;
-            foreach (ItemDef def in ItemCatalog.All)
+
+            foreach (ItemDef itemDef in ItemCatalog.Items)
             {
-                GameObject prefab = db.m_items.FirstOrDefault(i => i != null && i.name == def.Id);
+                GameObject prefab = objectDb.m_items.FirstOrDefault(i => i != null && i.name == itemDef.ItemId);
+
                 if (prefab == null)
                 {
-                    prefab = Make(template, def);
-                    db.m_items.Add(prefab);
+                    prefab = Make(template, itemDef);
+                    objectDb.m_items.Add(prefab);
                     added = true;
                 }
-                if (def.Station != null && !db.m_recipes.Any(r => r != null && r.name == "Recipe_" + def.Id))
+
+                if (itemDef.Station != null && !objectDb.m_recipes.Any(r => r != null && r.name == "Recipe_" + itemDef.ItemId))
                 {
-                    Recipe recipe = MakeRecipe(db, prefab.GetComponent<ItemDrop>(), def);
-                    if (recipe != null) { db.m_recipes.Add(recipe); added = true; }
+                    Recipe recipe = MakeRecipe(objectDb, prefab.GetComponent<ItemDrop>(), itemDef);
+
+                    if (recipe != null) { objectDb.m_recipes.Add(recipe); added = true; }
                 }
             }
-            if (added) Plugin.LogMessage("items: registered " + string.Join(", ", ItemCatalog.All.Select(d => d.Name)));
-            if (added) AccessTools.Method(typeof(ObjectDB), "UpdateRegisters").Invoke(db, null);   // private: rebuilds the by-name lookups
+
+            if (added) Plugin.LogMessage("items: registered " + string.Join(", ", ItemCatalog.Items.Select(d => d.Name)));
+
+            if (added) AccessTools.Method(typeof(ObjectDB), "UpdateRegisters").Invoke(objectDb, null);   // private: rebuilds the by-name lookups
         }
 
         /// <summary>Makes the prefabs known to the scene, so the items can be dropped and picked up.</summary>
@@ -58,11 +65,14 @@ namespace ValOutcast
         {
             if (scene == null || ObjectDB.instance == null) return;
             var named = (Dictionary<int, GameObject>)AccessTools.Field(typeof(ZNetScene), "m_namedPrefabs").GetValue(scene);
-            foreach (ItemDef def in ItemCatalog.All)
+
+            foreach (ItemDef itemDef in ItemCatalog.Items)
             {
-                GameObject prefab = ObjectDB.instance.m_items.FirstOrDefault(i => i != null && i.name == def.Id);
+                GameObject prefab = ObjectDB.instance.m_items.FirstOrDefault(i => i != null && i.name == itemDef.ItemId);
+
                 if (prefab == null) continue;
-                int hash = def.Id.GetStableHashCode();
+                int hash = itemDef.ItemId.GetStableHashCode();
+
                 if (named.ContainsKey(hash)) continue;
                 scene.m_prefabs.Add(prefab);
                 named[hash] = prefab;
@@ -73,14 +83,17 @@ namespace ValOutcast
         public static void GiveStartItems(Player player)
         {
             if (player == null || player.GetInventory() == null) return;
-            foreach (ItemDef def in ItemCatalog.All.Where(d => d.GiveAtStart))
+
+            foreach (ItemDef itemDef in ItemCatalog.Items.Where(d => d.GiveAtStart))
             {
-                string key = GivenKeyPrefix + def.Id;
-                if (player.m_customData.ContainsKey(key)) continue;
-                if (player.GetInventory().AddItem(def.Id, 1, 1, 0, 0L, "", false) != null)
+                string itemKey = GivenKeyPrefix + itemDef.ItemId;
+
+                if (player.m_customData.ContainsKey(itemKey)) continue;
+
+                if (player.GetInventory().AddItem(itemDef.ItemId, 1, 1, 0, 0L, "", false) != null)
                 {
-                    player.m_customData[key] = "1";   // only once it really is in the inventory, so a failed try is repeated
-                    Plugin.LogMessage("items: gave " + def.Name);
+                    player.m_customData[itemKey] = "1";   // only once it really is in the inventory, so a failed try is repeated
+                    Plugin.LogMessage("items: gave " + itemDef.Name);
                 }
             }
         }
@@ -92,73 +105,88 @@ namespace ValOutcast
         public static uint OwnedWeapons(Player player)
         {
             if (player == null || player.GetInventory() == null) return 0;
-            if (ObjectDB.instance != null && !ObjectDB.instance.m_items.Any(i => i != null && i.name == ItemCatalog.All[0].Id)) Register(ObjectDB.instance);
+
+            if (ObjectDB.instance != null && !ObjectDB.instance.m_items.Any(i => i != null && i.name == ItemCatalog.Items[0].ItemId)) Register(ObjectDB.instance);
+
             if (ZNetScene.instance != null) RegisterPrefabs(ZNetScene.instance);
             GiveStartItems(player);
             uint mask = 0;
+
             foreach (ItemDrop.ItemData item in player.GetInventory().GetAllItems())
             {
-                ItemDef def = ItemCatalog.All.FirstOrDefault(d => d.Weapon > 0 && item.m_dropPrefab != null && item.m_dropPrefab.name == d.Id);
-                if (def != null) mask |= 1u << def.Weapon;
+                ItemDef itemDef = ItemCatalog.Items.FirstOrDefault(d => d.Weapon > 0 && item.m_dropPrefab != null && item.m_dropPrefab.name == d.ItemId);
+
+                // Set this weapon's bit in the loadout mask.
+                if (itemDef != null) mask |= 1u << itemDef.Weapon;
             }
+
             return mask;
         }
 
-        private static GameObject Make(GameObject template, ItemDef def)
+        private static GameObject Make(GameObject template, ItemDef itemDef)
         {
-            GameObject go = UnityEngine.Object.Instantiate(template, _holder.transform);
-            go.name = def.Id;
-            ItemDrop drop = go.GetComponent<ItemDrop>();
-            ItemDrop.ItemData.SharedData s = drop.m_itemData.m_shared;
-            s.m_name = def.Name;
-            s.m_description = def.Description;
-            s.m_icons = new[] { LoadIcon(def.Icon) };
-            s.m_maxStackSize = 1;
-            s.m_weight = 1f;
-            s.m_value = 0;
-            s.m_teleportable = true;
-            drop.m_itemData.m_dropPrefab = go;
-            return go;
+            GameObject gameObject = UnityEngine.Object.Instantiate(template, _holder.transform);
+
+            gameObject.name = itemDef.ItemId;
+            ItemDrop drop = gameObject.GetComponent<ItemDrop>();
+            ItemDrop.ItemData.SharedData text = drop.m_itemData.m_shared;
+            text.m_name = itemDef.Name;
+            text.m_description = itemDef.Description;
+            text.m_icons = new[] { LoadIcon(itemDef.Icon) };
+            text.m_maxStackSize = 1;
+            text.m_weight = 1f;
+            text.m_value = 0;
+            text.m_teleportable = true;
+            drop.m_itemData.m_dropPrefab = gameObject;
+
+            return gameObject;
         }
 
-        private static Recipe MakeRecipe(ObjectDB db, ItemDrop result, ItemDef def)
+        // Build a craft recipe for the item, using the crafting station the item definition names.
+        private static Recipe MakeRecipe(ObjectDB objectDb, ItemDrop result, ItemDef itemDef)
         {
-            CraftingStation station = db.m_recipes
-                .Where(r => r != null && r.m_craftingStation != null && r.m_craftingStation.name == def.Station)
+            CraftingStation station = objectDb.m_recipes
+                .Where(r => r != null && r.m_craftingStation != null && r.m_craftingStation.name == itemDef.Station)
                 .Select(r => r.m_craftingStation).FirstOrDefault();
-            if (station == null) { Plugin.LogMessage("items: no crafting station " + def.Station + " for " + def.Name); return null; }
+
+            if (station == null) { Plugin.LogMessage("items: no crafting station " + itemDef.Station + " for " + itemDef.Name); return null; }
 
             var needs = new List<Piece.Requirement>();
-            foreach (var (prefab, amount) in def.Cost)
+
+            foreach (var (prefab, amount) in itemDef.Cost)
             {
-                GameObject res = db.GetItemPrefab(prefab);
-                if (res == null) { Plugin.LogMessage("items: ingredient " + prefab + " not found for " + def.Name); return null; }
-                needs.Add(new Piece.Requirement { m_resItem = res.GetComponent<ItemDrop>(), m_amount = amount });
+                GameObject resources = objectDb.GetItemPrefab(prefab);
+
+                if (resources == null) { Plugin.LogMessage("items: ingredient " + prefab + " not found for " + itemDef.Name); return null; }
+                needs.Add(new Piece.Requirement { m_resItem = resources.GetComponent<ItemDrop>(), m_amount = amount });
             }
+
             Recipe recipe = ScriptableObject.CreateInstance<Recipe>();
-            recipe.name = "Recipe_" + def.Id;
+            recipe.name = "Recipe_" + itemDef.ItemId;
             recipe.m_item = result;
             recipe.m_amount = 1;
             recipe.m_enabled = true;
             recipe.m_craftingStation = station;
             recipe.m_minStationLevel = 1;
             recipe.m_resources = needs.ToArray();
+
             return recipe;
         }
 
         private static Sprite LoadIcon(string file)
         {
             if (Icons.TryGetValue(file, out Sprite cached) && cached != null) return cached;
-            Assembly asm = typeof(OutcastItems).Assembly;
-            string resource = asm.GetManifestResourceNames().First(n => n.EndsWith(file, StringComparison.Ordinal));
-            using (var stream = asm.GetManifestResourceStream(resource))
+            Assembly assembly = typeof(OutcastItems).Assembly;
+            string resource = assembly.GetManifestResourceNames().First(n => n.EndsWith(file, StringComparison.Ordinal));
+            using (var stream = assembly.GetManifestResourceStream(resource))
             {
                 var bytes = new byte[stream.Length];
                 stream.Read(bytes, 0, bytes.Length);
-                var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                tex.LoadImage(bytes);
-                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                texture.LoadImage(bytes);
+                Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
                 Icons[file] = sprite;
+
                 return sprite;
             }
         }
@@ -167,25 +195,30 @@ namespace ValOutcast
     [HarmonyPatch(typeof(ObjectDB), "Awake")]
     internal static class ObjectDbAwakePatch
     {
+        // Safe wraps the call so a failure here can't break the game's own Awake.
         private static void Postfix(ObjectDB __instance) => Safe(() => OutcastItems.Register(__instance));
-        internal static void Safe(Action a) { try { a(); } catch (Exception e) { Plugin.LogMessage("items: " + e); } }
+
+        internal static void Safe(Action action) { try { action(); } catch (Exception error) { Plugin.LogMessage("items: " + error); } }
     }
 
     [HarmonyPatch(typeof(ObjectDB), "CopyOtherDB")]
     internal static class ObjectDbCopyPatch
     {
+        // Safe wraps the call so a failure here can't break the game's own Awake.
         private static void Postfix(ObjectDB __instance) => ObjectDbAwakePatch.Safe(() => OutcastItems.Register(__instance));
     }
 
     [HarmonyPatch(typeof(ZNetScene), "Awake")]
     internal static class ZNetSceneAwakePatch
     {
+        // Safe wraps the call so a failure here can't break the game's own Awake.
         private static void Postfix(ZNetScene __instance) => ObjectDbAwakePatch.Safe(() => OutcastItems.RegisterPrefabs(__instance));
     }
 
     [HarmonyPatch(typeof(Player), "OnSpawned")]
     internal static class PlayerSpawnedPatch
     {
+        // Safe wraps the call so a failure here can't break the game's own Awake.
         private static void Postfix(Player __instance) => ObjectDbAwakePatch.Safe(() => OutcastItems.GiveStartItems(__instance));
     }
 }

@@ -23,11 +23,11 @@ namespace ValOutcast
         private bool _show;
         private bool _loggedFirst;
         private bool _late;   // the last picture did not arrive in time: the next one to arrive belongs to an old request
-        private readonly Action<string> _log;
+        private readonly Action<string> _logger;
 
-        public Overlay(Action<string> log)
+        public Overlay(Action<string> logger)
         {
-            _log = log;
+            _logger = logger;
         }
 
         /// <summary>Call every frame.</summary>
@@ -40,6 +40,7 @@ namespace ValOutcast
             {
                 _show = false;
                 PlayerFollow.Lockstep = false;
+
                 return;
             }
 
@@ -47,24 +48,31 @@ namespace ValOutcast
             {
                 _reader.RequestFrame(HorizontalFov()); // one picture per Valheim frame, so the two games' frames keep step
                 // Wait for that picture (Outcast makes it in a few milliseconds), so it is shown in the same frame it was asked for.
-                bool got = false;
+                bool gotPicture = false;
                 int width = 0, height = 0;
                 long start = Stopwatch.GetTimestamp();
+
                 while (true)
                 {
-                    got = _reader.TryRead(ref _pixels, out width, out height);
-                    if (got && _late)
+                    gotPicture = _reader.TryRead(ref _pixels, out width, out height);
+
+                    if (gotPicture && _late)
                     {
                         _late = false; // an old picture that arrived late: skip it and wait for the one for this frame
-                        got = false;
+                        gotPicture = false;
                     }
-                    if (got) break;
+
+                    if (gotPicture) break;
+
                     if ((Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency > WaitMs) break;
                     Thread.Sleep(0);
                 }
-                PlayerFollow.Lockstep = got;
-                if (!got && _lastChange > 0f) _late = true;
-                if (got)
+
+                PlayerFollow.Lockstep = gotPicture;
+
+                if (!gotPicture && _lastChange > 0f) _late = true;
+
+                if (gotPicture)
                 {
                     if (_texture == null || _texture.width != width || _texture.height != height)
                     {
@@ -73,19 +81,22 @@ namespace ValOutcast
                         _texture.filterMode = FilterMode.Bilinear;
                         _texture.wrapMode = TextureWrapMode.Clamp;
                     }
+
                     _texture.LoadRawTextureData(_pixels);
                     _texture.Apply(false);
                     _lastChange = Time.realtimeSinceStartup;
                     _show = true;
+
                     if (!_loggedFirst)
                     {
                         _loggedFirst = true;
-                        _log("overlay: showing Outcast's picture, " + width + "x" + height);
+                        _logger("overlay: showing Outcast's picture, " + width + "x" + height);
                     }
                 }
             }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
+                _logger("overlay: frame file unreadable, hiding picture: " + error.Message);
                 _reader.Close();
                 _show = false;
             }
@@ -102,10 +113,12 @@ namespace ValOutcast
         /// </summary>
         private static float HorizontalFov()
         {
-            Camera cam = Camera.main;
-            if (cam == null || cam.pixelHeight <= 0) return 0f;
-            float aspect = (float)cam.pixelWidth / cam.pixelHeight;
-            return 2f * Mathf.Atan(Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad * 0.5f) * aspect) * Mathf.Rad2Deg;
+            Camera camera = Camera.main;
+
+            if (camera == null || camera.pixelHeight <= 0) return 0f;
+            float aspect = (float)camera.pixelWidth / camera.pixelHeight;
+
+            return 2f * Mathf.Atan(Mathf.Tan(camera.fieldOfView * Mathf.Deg2Rad * 0.5f) * aspect) * Mathf.Rad2Deg;
         }
 
         /// <summary>Call from OnGUI.</summary>
@@ -114,11 +127,11 @@ namespace ValOutcast
             if (!_show || _texture == null || Event.current.type != EventType.Repaint) return;
 
             var rect = new Rect(0f, 0f, Screen.width, Screen.height);
-            float b = Mathf.Clamp(Plugin.OverlayBrightness, 0f, 2f);
-            Color old = GUI.color;
-            GUI.color = new Color(b, b, b, 1f); // dims the picture without making it see-through
+            float brightness = Mathf.Clamp(Plugin.OverlayBrightness, 0f, 2f);
+            Color previousColor = GUI.color;
+            GUI.color = new Color(brightness, brightness, brightness, 1f); // dims the picture without making it see-through
             GUI.DrawTexture(rect, _texture, ScaleMode.StretchToFill, true);
-            GUI.color = old;
+            GUI.color = previousColor;
         }
 
         public void Close()

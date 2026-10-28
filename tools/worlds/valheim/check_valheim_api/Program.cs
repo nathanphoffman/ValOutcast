@@ -8,49 +8,53 @@ using System.Reflection;
 
 class Program
 {
-    static int Main(string[] args)
+    const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+    static Assembly valheimAsm, utilsAsm;
+    static int missing;
+
+    static Type Find(string name) => valheimAsm.GetType(name) ?? utilsAsm.GetType(name);
+
+    // Check that a method exists on the game type, optionally with the expected argument count.
+    static void Method(string type, string name, int? parameters = null)
     {
-        string valheim = args.Length > 0 ? args[0] : Path.Combine(Environment.GetEnvironmentVariable("HOME"), ".local/share/Steam/steamapps/common/Valheim");
-        string managed = Path.Combine(valheim, "valheim_Data", "Managed");
-        string bepinex = Path.Combine(valheim, "BepInEx", "core");
-        var paths = Directory.GetFiles(managed, "*.dll").Concat(Directory.GetFiles(bepinex, "*.dll")).ToList();
-        using var mlc = new MetadataLoadContext(new PathAssemblyResolver(paths), "mscorlib");
-        var valheimAsm = mlc.LoadFromAssemblyPath(Path.Combine(managed, "assembly_valheim.dll"));
-        var utilsAsm = mlc.LoadFromAssemblyPath(Path.Combine(managed, "assembly_utils.dll"));
+        Type gameType = Find(type);
+        bool found = false;
 
-        const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        int missing = 0;
+        for (Type current = gameType; current != null && !found; current = current.BaseType)
+            found = current.GetMethods(AllMembers).Any(m => m.Name == name && (parameters == null || m.GetParameters().Length == parameters));
+        Report(found, type + "." + name + "()");
+    }
 
-        Type Find(string name) => valheimAsm.GetType(name) ?? utilsAsm.GetType(name);
-        void Method(string type, string name, int? parameters = null)
-        {
-            Type t = Find(type);
-            bool ok = false;
-            for (Type c = t; c != null && !ok; c = c.BaseType)
-                ok = c.GetMethods(All).Any(m => m.Name == name && (parameters == null || m.GetParameters().Length == parameters));
-            Report(ok, type + "." + name + "()");
-        }
-        void Field(string type, string name, string fieldType = null)
-        {
-            Type t = Find(type);
-            FieldInfo f = null;
-            for (Type c = t; c != null && f == null; c = c.BaseType) f = c.GetField(name, All);
-            Report(f != null && (fieldType == null || f.FieldType.Name == fieldType), type + "." + name);
-        }
-        void Type(string type) => Report(Find(type) != null, type);
-        void Property(string type, string name)
-        {
-            Type t = Find(type);
-            bool ok = false;
-            for (Type c = t; c != null && !ok; c = c.BaseType) ok = c.GetProperty(name, All) != null;
-            Report(ok, type + "." + name);
-        }
-        void Report(bool ok, string what)
-        {
-            if (!ok) { Console.WriteLine("MISSING: " + what); missing++; }
-        }
+    // Check that a field exists on the game type, and optionally has the expected type.
+    static void Field(string type, string name, string fieldType = null)
+    {
+        Type gameType = Find(type);
+        FieldInfo field = null;
 
-        // Harmony patches
+        for (Type current = gameType; current != null && field == null; current = current.BaseType) field = current.GetField(name, AllMembers);
+        Report(field != null && (fieldType == null || field.FieldType.Name == fieldType), type + "." + name);
+    }
+
+    static void GameType(string type) => Report(Find(type) != null, type);
+
+    static void Property(string type, string name)
+    {
+        Type gameType = Find(type);
+        bool found = false;
+
+        // Walk up the base classes, since the property may be declared on a parent type.
+        for (Type current = gameType; current != null && !found; current = current.BaseType) found = current.GetProperty(name, AllMembers) != null;
+        Report(found, type + "." + name);
+    }
+
+    static void Report(bool found, string what)
+    {
+        if (!found) { Console.WriteLine("MISSING: " + what); missing++; }
+    }
+
+    static void CheckHarmonyPatches()
+    {
         Method("Player", "OnSpawned"); Method("Chat", "SendText");
         Method("ObjectDB", "Awake"); Method("ObjectDB", "CopyOtherDB"); Method("ObjectDB", "UpdateRegisters"); Method("ZNetScene", "Awake");
         Method("Tameable", "Tame", 0); Method("Character", "SetTamed", 1); Method("MonsterAI", "SetFollowTarget", 1);
@@ -70,8 +74,8 @@ class Program
         Field("VisEquipment", "m_leftItemInstance", "GameObject");
         Method("Humanoid", "HideHandItems", 2);
         Method("Humanoid", "ShowHandItems", 2);
-        Type("IDestructible");
-        Type("WearNTear");
+        GameType("IDestructible");
+        GameType("WearNTear");
         Field("HitData", "m_hitCollider");
         Field("HitData", "m_toolTier");
         Method("ZNetScene", "GetPrefab", 1);
@@ -79,7 +83,10 @@ class Program
         Method("ZInput", "GetMouseScrollWheel", 0);
         Method("PlayerController", "TakeInput", 1);
         Method("Character", "RPC_Damage", 2);
-        // Player and camera
+    }
+
+    static void CheckPlayerAndCamera()
+    {
         Field("Player", "m_localPlayer", "Player");
         Method("Character", "SetLookDir");
         Field("Character", "m_body", "Rigidbody");
@@ -89,7 +96,10 @@ class Program
         Field("HitData", "m_hitType");
         Field("Character", "m_eye");
         Property("GameCamera", "instance");
-        // Creatures and damage
+    }
+
+    static void CheckCreaturesAndDamage()
+    {
         Method("Character", "GetAllCharacters", 0);
         Method("Character", "IsPlayer", 0);
         Method("Character", "IsDead", 0);
@@ -102,26 +112,50 @@ class Program
         Method("Character", "Damage", 1);
         Method("BaseAI", "IsEnemy", 2);
         Method("HitData", "GetTotalDamage", 0);
-        foreach (var f in new[] { "m_damage", "m_point", "m_dir", "m_pushForce", "m_attacker" }) Field("HitData", f);
+
+        foreach (var field in new[] { "m_damage", "m_point", "m_dir", "m_pushForce", "m_attacker" }) Field("HitData", field);
         Field("HitData+DamageTypes", "m_slash", "Single");
-        // World and terrain
+    }
+
+    static void CheckWorldAndTerrain()
+    {
         Method("ZoneSystem", "GetGroundHeight", 2);
         Field("ZoneSystem", "s_instance");
-        // Input and menus
+    }
+
+    static void CheckInputAndMenus()
+    {
         Method("ZInput", "GetButton", 1);
         Method("ZInput", "GetKey", 2);
         Method("Character", "ApplyPushback", 2);
         Method("ZInput", "GetMouseDelta", 0);
         Method("ZInput", "IsMouseActive", 0);
         Field("PlayerController", "m_mouseSens", "Single");
+
         foreach (var (type, m) in new[] { ("Menu", "IsVisible"), ("Console", "IsVisible"), ("TextInput", "IsVisible"), ("InventoryGui", "IsVisible"), ("StoreGui", "IsVisible"), ("Minimap", "IsOpen") })
             Method(type, m, 0);
         Method("Chat", "HasFocus", 0);
-        Type("HotkeyBar");
+        GameType("HotkeyBar");
         Property("EnvMan", "instance");
         Field("EnvMan", "m_dirLight", "Light");
+    }
 
+    static int Main(string[] args)
+    {
+        string valheim = args.Length > 0 ? args[0] : Path.Combine(Environment.GetEnvironmentVariable("HOME"), ".local/share/Steam/steamapps/common/Valheim");
+        string managed = Path.Combine(valheim, "valheim_Data", "Managed");
+        string bepinex = Path.Combine(valheim, "BepInEx", "core");
+        var paths = Directory.GetFiles(managed, "*.dll").Concat(Directory.GetFiles(bepinex, "*.dll")).ToList();
+        using var loadContext = new MetadataLoadContext(new PathAssemblyResolver(paths), "mscorlib");
+        valheimAsm = loadContext.LoadFromAssemblyPath(Path.Combine(managed, "assembly_valheim.dll"));
+        utilsAsm = loadContext.LoadFromAssemblyPath(Path.Combine(managed, "assembly_utils.dll"));
+        CheckHarmonyPatches();
+        CheckPlayerAndCamera();
+        CheckCreaturesAndDamage();
+        CheckWorldAndTerrain();
+        CheckInputAndMenus();
         Console.WriteLine(missing == 0 ? "all Valheim hooks found" : missing + " Valheim hooks missing");
+
         return missing == 0 ? 0 : 1;
     }
 }

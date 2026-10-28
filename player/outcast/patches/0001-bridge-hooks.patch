@@ -506,13 +506,18 @@ diff --git a/codeJK2/game/CMakeLists.txt b/codeJK2/game/CMakeLists.txt
 index 2790dc8..6242832 100644
 --- a/codeJK2/game/CMakeLists.txt
 +++ b/codeJK2/game/CMakeLists.txt
-@@ -86,6 +86,9 @@ set(JK2SPGameGameFiles
+@@ -86,6 +86,14 @@ set(JK2SPGameGameFiles
  	"${JK2SPDir}/game/g_itemLoad.cpp"
  	"${JK2SPDir}/game/g_items.cpp"
  	"${JK2SPDir}/game/g_main.cpp"
 +	"${JK2SPDir}/game/valoutcast/vo_bridge.cpp"
 +	"${JK2SPDir}/game/valoutcast/vo_field.cpp"
 +	"${JK2SPDir}/game/valoutcast/vo_link.c"
++	"${JK2SPDir}/game/valoutcast/vo_link_send.c"
++	"${JK2SPDir}/game/valoutcast/vo_wire.c"
++	"${JK2SPDir}/game/valoutcast/vo_codec_actor.c"
++	"${JK2SPDir}/game/valoutcast/vo_codec_state.c"
++	"${JK2SPDir}/game/valoutcast/vo_codec_world.c"
  	"${JK2SPDir}/game/g_mem.cpp"
  	"${JK2SPDir}/game/g_misc.cpp"
  	"${JK2SPDir}/game/g_misc_model.cpp"

@@ -10,31 +10,33 @@ namespace ValOutcast
     {
         private const float SendInterval = 0.25f;
         private float _next;
-        private readonly float[] _dir = new float[3];
-        private readonly float[] _sun = new float[3];
+        private readonly float[] _sunDirection = new float[3];
+        private readonly float[] _sunColor = new float[3];
         private readonly float[] _ambient = new float[3];
 
         public void Update(VoLink link)
         {
             if (link == null || !link.Connected || !PlayerFollow.Active || Player.m_localPlayer == null) return;
+
             if (Time.unscaledTime < _next) return;
             _next = Time.unscaledTime + SendInterval;
 
-            EnvMan env = EnvMan.instance;
-            if (env == null || env.m_dirLight == null) return;
-            Light sun = env.m_dirLight;
+            EnvMan environment = EnvMan.instance;
+
+            if (environment == null || environment.m_dirLight == null) return;
+            Light sunLight = environment.m_dirLight;
 
             // The light travels along its forward direction, so the sun is the other way. Unity to wire: flip Z.
-            Vector3 toSun = -sun.transform.forward;
-            _dir[0] = toSun.x; _dir[1] = toSun.y; _dir[2] = -toSun.z;
+            Vector3 toSun = -sunLight.transform.forward;
+            _sunDirection[0] = toSun.x; _sunDirection[1] = toSun.y; _sunDirection[2] = -toSun.z;
 
-            Color c = sun.color * sun.intensity;
-            _sun[0] = c.r; _sun[1] = c.g; _sun[2] = c.b;
+            Color sunColor = sunLight.color * sunLight.intensity;
+            _sunColor[0] = sunColor.r; _sunColor[1] = sunColor.g; _sunColor[2] = sunColor.b;
 
-            Color a = RenderSettings.ambientLight;
-            _ambient[0] = a.r; _ambient[1] = a.g; _ambient[2] = a.b;
+            Color ambientColor = RenderSettings.ambientLight;
+            _ambient[0] = ambientColor.r; _ambient[1] = ambientColor.g; _ambient[2] = ambientColor.b;
 
-            link.SendWorldContext(_dir, _sun, _ambient);
+            link.SendWorldContext(_sunDirection, _sunColor, _ambient);
         }
     }
 }

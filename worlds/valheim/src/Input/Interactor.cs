@@ -18,17 +18,22 @@ namespace ValOutcast
         {
             if (!PlayerFollow.Active || InputForwarder.MenuOpen()) return;
             Player player = Player.m_localPlayer;
+
             if (player == null || !ZInput.GetButtonDown("Use")) return;
 
             GameObject hover = player.GetHoverObject();
+
             if (hover == null) return;
 
             if (InteractMethod == null)
             {
                 Plugin.LogMessage("use: Player.Interact not found (did the game update?)");
+
                 return;
             }
+
             InteractMethod.Invoke(player, new object[] { hover, false, false });
+
             // Valheim's menus close when they see the Use key go down. This frame's press is what opened this one, so it is used up here;
             // otherwise a crafting station menu would open and close in the same frame.
             ZInput.ResetButtonStatus("Use");

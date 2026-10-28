@@ -59,23 +59,26 @@ namespace ValOutcast
         /// <summary>Valheim world position to the player side's wire coordinates (meters, Y up, -Z forward).</summary>
         public static Vector3 WorldToWire(Vector3 world)
         {
-            Vector3 u = _anchorWire + (world - _anchorWorld);
-            return new Vector3(u.x, u.y, -u.z);
+            Vector3 unityPoint = _anchorWire + (world - _anchorWorld);
+
+            return new Vector3(unityPoint.x, unityPoint.y, -unityPoint.z);
         }
 
         /// <summary>A point in the player side's wire coordinates to the Valheim world.</summary>
         public static Vector3 WireToWorld(Vector3 wire)
         {
-            Vector3 u = new Vector3(wire.x, wire.y, -wire.z);
-            return _anchorWorld + (u - _anchorWire);
+            Vector3 unityPoint = new Vector3(wire.x, wire.y, -wire.z);
+
+            return _anchorWorld + (unityPoint - _anchorWire);
         }
 
         /// <summary>Wire X and Z of a point to the Valheim world X and Z (Y is left at 0).</summary>
         public static Vector3 WireToWorldXZ(float wireX, float wireZ)
         {
-            Vector3 u = new Vector3(wireX, 0f, -wireZ);
-            Vector3 w = _anchorWorld + (u - _anchorWire);
-            return new Vector3(w.x, 0f, w.z);
+            Vector3 unityPoint = new Vector3(wireX, 0f, -wireZ);
+            Vector3 worldPoint = _anchorWorld + (unityPoint - _anchorWire);
+
+            return new Vector3(worldPoint.x, 0f, worldPoint.z);
         }
 
         /// <summary>Valheim height to wire height.</summary>
@@ -88,15 +91,17 @@ namespace ValOutcast
         public static bool Active => Plugin.Link != null && Plugin.Link.PlayerStateFresh;
 
         // Wire is right-handed Y-up (-Z forward). Unity is left-handed Y-up (+Z forward): flip Z.
-        private static Vector3 WireToUnity(float[] v)
+        private static Vector3 WireToUnity(float[] wire)
         {
-            return new Vector3(v[0], v[1], -v[2]);
+            return new Vector3(wire[0], wire[1], -wire[2]);
         }
 
+        // Show or hide the player's own body model (hidden while the player side controls the camera).
         private static void ShowBody(Player player, bool show)
         {
             if (player == null) return;
             GameObject visual = VisualRef(player);
+
             if (visual != null && visual.activeSelf != show) visual.SetActive(show);
             _hidden = !show;
         }
@@ -105,29 +110,35 @@ namespace ValOutcast
         public static void Tick(Player player)
         {
             if (player == null) return;
+
             if (!Active)
             {
                 _anchored = false;
                 _hasSample = false;
                 _serial = -1;
+
                 if (_hidden) ShowBody(player, true);
+
                 return;
             }
 
             VoLink link = Plugin.Link;
+
             if (link.StateSerial != _serial)
             {
                 _serial = link.StateSerial;
                 AddSample(link, player);
             }
+
             if (!_hasSample) return;
 
             // Show the newest two samples one after the other, so movement is smooth even though they arrive 20 times a second.
-            float t = Lockstep ? 1f : Mathf.Clamp01((Time.unscaledTime - _latestTime) / _interval);
-            _currentPos = Vector3.Lerp(_prevPos, _latestPos, t);
-            _currentLook = Vector3.Slerp(_prevLook, _latestLook, t);
+            float blend = Lockstep ? 1f : Mathf.Clamp01((Time.unscaledTime - _latestTime) / _interval);
+            _currentPos = Vector3.Lerp(_prevPos, _latestPos, blend);
+            _currentLook = Vector3.Slerp(_prevLook, _latestLook, blend);
 
             Place(player);
+
             // Outcast draws the hands, so Valheim's own body would only get in the way. In tool mode it is Valheim's arms and item that are used.
             if (_hidden == ToolMode.Active) ShowBody(player, ToolMode.Active);
         }
@@ -136,10 +147,12 @@ namespace ValOutcast
         {
             Vector3 wirePos = WireToUnity(link.StatePos);
             Vector3 look = WireToUnity(link.StateLook);
+
             if (look.sqrMagnitude < 0.0001f) look = _latestLook.sqrMagnitude > 0f ? _latestLook : Vector3.forward;
             look.Normalize();
 
             bool teleported = _hasSample && (wirePos - _wireOfLatest).magnitude > TeleportMeters;
+
             if (teleported) _anchored = false;     // the other game teleported its player: stay put and re-anchor
 
             if (!_anchored)
@@ -147,19 +160,22 @@ namespace ValOutcast
                 _anchored = true;
                 _anchorWire = wirePos;
                 _anchorWorld = player.transform.position;
+
                 // Anchor to the real ground under the Valheim player, not to wherever the body is right now
                 // (it may be falling in or standing on something). The other game's feet then start on the ground.
                 if (ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(_anchorWorld, out float groundY))
                 {
                     _anchorWorld.y = groundY;
                 }
+
                 AnchorGeneration++;
                 AnchoredAt = Time.unscaledTime;
                 _hasSample = false;
             }
 
             Vector3 world = _anchorWorld + (wirePos - _anchorWire);
-            float now = Time.unscaledTime;
+            float nowSeconds = Time.unscaledTime;
+
             if (!_hasSample)
             {
                 _prevPos = _latestPos = world;
@@ -172,9 +188,10 @@ namespace ValOutcast
                 _prevLook = _currentLook;
                 _latestPos = world;
                 _latestLook = look;
-                _interval = Mathf.Lerp(_interval, Mathf.Clamp(now - _latestTime, 0.015f, 0.1f), 0.2f);
+                _interval = Mathf.Lerp(_interval, Mathf.Clamp(nowSeconds - _latestTime, 0.015f, 0.1f), 0.2f);
             }
-            _latestTime = now;
+
+            _latestTime = nowSeconds;
             _wireOfLatest = wirePos;
         }
 
@@ -183,9 +200,11 @@ namespace ValOutcast
             Rigidbody body = BodyRef(player);
             body.position = _currentPos;
             body.linearVelocity = Vector3.zero;
+
             // The body is moved around by the other game, so Valheim must not count that as falling (fall damage).
             MaxAirAltitudeRef(player) = _currentPos.y;
             player.transform.position = _currentPos;
+
             if (_currentLook.sqrMagnitude > 0.0001f) player.SetLookDir(_currentLook);
         }
 
@@ -220,8 +239,10 @@ namespace ValOutcast
             if (PlayerFollow.Active && !ToolMode.Active)
             {
                 __result = false;
+
                 return false;
             }
+
             return true;
         }
     }
@@ -235,8 +256,10 @@ namespace ValOutcast
             if (PlayerFollow.Active && !ToolMode.Active)
             {
                 __result = false;
+
                 return false;
             }
+
             return true;
         }
     }
@@ -255,36 +278,42 @@ namespace ValOutcast
         private static float _smoothY;
         private static bool _hasSmoothY;
 
-        private static float SmoothHeight(float y)
+        private static float SmoothHeight(float heightY)
         {
-            if (!_hasSmoothY || Mathf.Abs(y - _smoothY) > HeightSnapMeters) _smoothY = y;
-            else _smoothY += (y - _smoothY) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / HeightEaseSeconds));
+            if (!_hasSmoothY || Mathf.Abs(heightY - _smoothY) > HeightSnapMeters) _smoothY = heightY;
+            else _smoothY += (heightY - _smoothY) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / HeightEaseSeconds));
             _hasSmoothY = true;
+
             return _smoothY;
         }
 
         private static void Postfix(GameCamera __instance)
         {
             Player player = Player.m_localPlayer;
+
             if (player == null || !PlayerFollow.Active || !PlayerFollow.HasCurrent)
             {
                 _hasSmoothY = false;
                 HeldItemView.Clear();
                 SaberGlow.Clear();
+
                 return;
             }
+
             if (player.m_eye == null || PlayerFollow.CurrentLook.sqrMagnitude < 0.0001f) return;
 
             Vector3 eyeHeight = player.m_eye.position - player.transform.position;
             Quaternion rotation = Quaternion.LookRotation(PlayerFollow.CurrentLook, Vector3.up);
             Vector3 position = PlayerFollow.CurrentPosition + eyeHeight;
             position.y = SmoothHeight(position.y);
+
             // Optional: in tool mode the camera can sit a little away from the eyes (see ToolMode.CameraOffset). The held item itself is
             // shown by HeldItemView.
             if (ToolMode.Active) position += rotation * ToolMode.CameraOffset;
             __instance.transform.position = position;
             __instance.transform.rotation = rotation;
             SaberGlow.Update(Plugin.Link, __instance.transform);
+
             if (ToolMode.Active) HeldItemView.Update(player, __instance.transform);
             else HeldItemView.Clear();
         }

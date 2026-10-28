@@ -11,7 +11,7 @@ namespace ValOutcast
     {
         private const float SendInterval = 1f / 60f;
         private float _nextSend;
-        private float _yaw, _pitch;
+        private float _yawDelta, _pitch;
         private int _weapon;
         private bool _giveAll;
 
@@ -29,10 +29,11 @@ namespace ValOutcast
         private readonly System.Collections.Generic.HashSet<KeyCode> _keysDown = new System.Collections.Generic.HashSet<KeyCode>();
 
         /// <summary>True once when the key goes down (ZInput only offers the held state for raw keys).</summary>
-        private bool KeyPressed(KeyCode key)
+        private bool KeyPressed(KeyCode keyCode)
         {
-            if (!ZInput.GetKey(key)) { _keysDown.Remove(key); return false; }
-            return _keysDown.Add(key);
+            if (!ZInput.GetKey(keyCode)) { _keysDown.Remove(keyCode); return false; }
+
+            return _keysDown.Add(keyCode);
         }
 
         private static bool Button(string name)
@@ -52,6 +53,7 @@ namespace ValOutcast
             _giveAll = true;
         }
 
+        // True while any menu or text box has focus, so game keys shouldn't be sent as input.
         internal static bool MenuOpen()
         {
             return Menu.IsVisible()
@@ -73,14 +75,17 @@ namespace ValOutcast
             }
 
             bool open = MenuOpen();
+
             if (!open && !ToolMode.Active)
             {
                 // Weapon keys (in tool mode they belong to Valheim's hotbar): the hotbar number keys pick a slot, the mouse wheel goes to the next or previous weapon.
-                for (int i = 1; i <= 8; i++)
+                for (int index = 1; index <= 8; index++)
                 {
-                    if (ZInput.GetButtonDown("Hotbar" + i) || ZInput.GetButtonDown("Hotbar" + i + "Alt")) _weapon = i;
+                    if (ZInput.GetButtonDown("Hotbar" + index) || ZInput.GetButtonDown("Hotbar" + index + "Alt")) _weapon = index;
                 }
+
                 float wheel = ZInput.GetMouseScrollWheel();
+
                 if (wheel > 0.01f) _weapon = 10;
                 else if (wheel < -0.01f) _weapon = 11;
             }
@@ -88,19 +93,20 @@ namespace ValOutcast
             if (!open && !ToolMode.Active)
             {
                 // Saber style and force power selection (weapon requests 15 to 18).
-                bool style = KeyPressed(StyleKey), prev = KeyPressed(PrevPowerKey), next = KeyPressed(NextPowerKey), use = KeyPressed(UsePowerKey);
+                bool style = KeyPressed(StyleKey), prev = KeyPressed(PrevPowerKey), next = KeyPressed(NextPowerKey), usePower = KeyPressed(UsePowerKey);
+
                 if (style) _weapon = 15;
                 else if (prev) _weapon = 17;
                 else if (next) _weapon = 16;
-                else if (use) _weapon = 18;
+                else if (usePower) _weapon = 18;
             }
 
             if (!open && ZInput.IsMouseActive())
             {
                 // Mouse moves add up between sends, so no turning is lost.
-                Vector2 d = ZInput.GetMouseDelta() * PlayerController.m_mouseSens * Plugin.MouseDegreesPerCount;
-                _yaw += -d.x;   // moving the mouse right turns right: yaw is positive to the left
-                _pitch += d.y;  // moving the mouse up looks up
+                Vector2 mouseDelta = ZInput.GetMouseDelta() * PlayerController.m_mouseSens * Plugin.MouseDegreesPerCount;
+                _yawDelta += -mouseDelta.x;   // moving the mouse right turns right: yaw is positive to the left
+                _pitch += mouseDelta.y;  // moving the mouse up looks up
             }
 
             if (Time.realtimeSinceStartup < _nextSend) return;
@@ -110,32 +116,42 @@ namespace ValOutcast
             {
                 // Menu open: send "no input" so the player stands still.
                 link.SendInput(0, 0f, 0f, 0f, 0f, 0f);
-                _yaw = _pitch = 0f;
+                _yawDelta = _pitch = 0f;
                 _weapon = 0;
+
                 return;
             }
 
             uint buttons = 0;
+
             if (!ToolMode.Active)   // in tool mode the buttons belong to Valheim's item
             {
                 if (Button("Attack")) buttons |= VoLink.ButtonAttack;
+
                 // Valheim calls right click "Block" and middle click "SecondaryAttack": both are Outcast's alternate fire.
                 if (Button("SecondaryAttack") || Button("Block")) buttons |= VoLink.ButtonAltAttack;
+
                 if (Button("Use") || Button("AltPlace")) buttons |= VoLink.ButtonUse;
+
                 // Force powers, on the same keys as Outcast: F1 push, F2 pull, F3 speed, F4 mind trick, F5 heal, F6 grip, F7 lightning.
-                for (int i = 0; i < AbilityKeys.Length; i++)
+                for (int index = 0; index < AbilityKeys.Length; index++)
                 {
-                    if (ZInput.GetKey(AbilityKeys[i])) buttons |= VoLink.ButtonAbility(i + 1);
+                    if (ZInput.GetKey(AbilityKeys[index])) buttons |= VoLink.ButtonAbility(index + 1);
                 }
             }
 
+            // Each axis is +1 for one button, -1 for the opposite, 0 for neither or both.
             float forward = (Button("Forward") ? 1f : 0f) - (Button("Backward") ? 1f : 0f);
+
+            // Same pattern for the sideways axis.
             float right = (Button("Right") ? 1f : 0f) - (Button("Left") ? 1f : 0f);
-            float up = Button("Jump") ? 1f : (Button("Crouch") ? -1f : 0f);
+
+            // Jump wins over crouch; both map to a single up/down axis.
+            float upward = Button("Jump") ? 1f : (Button("Crouch") ? -1f : 0f);
 
             if (_giveAll) { _weapon = 14; _giveAll = false; }
-            link.SendInput(buttons, forward, right, up, _yaw, _pitch, _weapon);
-            _yaw = _pitch = 0f;
+            link.SendInput(buttons, forward, right, upward, _yawDelta, _pitch, _weapon);
+            _yawDelta = _pitch = 0f;
             _weapon = 0;
         }
     }

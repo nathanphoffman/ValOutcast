@@ -13,6 +13,7 @@ namespace ValOutcast
 
         /// <summary>Degrees of turning per mouse movement (on top of Valheim's own mouse sensitivity setting).</summary>
         public static float MouseDegreesPerCount = 1f;
+
         /// <summary>1 = the picture as Outcast drew it, lower is dimmer.</summary>
         public static float OverlayBrightness = 0.85f;
         private Harmony _harmony;
@@ -21,7 +22,7 @@ namespace ValOutcast
         private readonly InputForwarder _input = new InputForwarder();
         public static InputForwarder Input;
         private Overlay _overlay;
-        private readonly HudHider _hud = new HudHider();
+        private readonly HudHider _hudHider = new HudHider();
         private readonly WorldLight _light = new WorldLight();
         private readonly Loadout _loadout = new Loadout();
         private readonly TestSpawner _spawner = new TestSpawner();
@@ -50,62 +51,68 @@ namespace ValOutcast
                 Config.Bind("ToolMode", "ItemForward", 0.55f, "Where the held item is drawn: moved this far forward from where the real item is (meters).").Value);
             OverlayBrightness = Config.Bind("Overlay", "Brightness", 0.85f,
                 "Brightness of Outcast's picture drawn over Valheim. 1 is as drawn, lower is dimmer.").Value;
+
             // Keep updating the link while the other game's window has focus.
             Application.runInBackground = true;
+
             try
             {
                 Link = new VoLink(VoLink.RoleWorld, msg => Logger.LogInfo("link: " + msg));
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                Logger.LogError("could not open link (port " + VoLink.PortWorld + " in use?): " + e.Message);
+                Logger.LogError("could not open link (port " + VoLink.PortWorld + " in use?): " + error.Message);
             }
+
             _overlay = new Overlay(msg => Logger.LogInfo(msg));
             _perf = new PerfStats(msg => Logger.LogInfo(msg));
+
             try
             {
                 Input = _input;
                 _harmony = new Harmony("com.valoutcast.bridge");
                 _harmony.PatchAll();
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                Logger.LogError("could not hook into Valheim (did the game update?): " + e);
+                Logger.LogError("could not hook into Valheim (did the game update?): " + error);
             }
         }
 
-        private void Run(ref bool ok, string name, Action action)
+        private void RunGuarded(ref bool enabled, string name, Action action)
         {
-            if (!ok) return;
+            if (!enabled) return;
+
             try
             {
                 _perf.Measure(name, action);
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                ok = false;
-                Logger.LogError(name + " switched off after an error: " + e);
+                enabled = false;
+                Logger.LogError(name + " switched off after an error: " + error);
             }
         }
 
         private void Update()
         {
             Link?.Tick();
+
             // Order matters for the 1:1 frame sync: send this frame's input, ask Outcast for the picture and wait for it,
             // then read the position Outcast sent while making it, so the picture and the camera come from the same Outcast frame.
             ToolMode.Update(_input);
-            Run(ref _inputOk, "input", () => _input.Update(Link));
-            Run(ref _overlayOk, "overlay", () => _overlay.Update());
+            RunGuarded(ref _inputOk, "input", () => _input.Update(Link));
+            RunGuarded(ref _overlayOk, "overlay", () => _overlay.Update());
             Link?.Tick();
-            Run(ref _followOk, "follow", () => PlayerFollow.Tick(Player.m_localPlayer));
-            Run(ref _streamerOk, "terrain", () => _streamer.Update(Link));
-            Run(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
-            Run(ref _worldHitsOk, "worldhits", () => _worldHits.Update(Link));
-            Run(ref _interactOk, "interact", () => { if (!ToolMode.Active) _interactor.Update(); });
+            RunGuarded(ref _followOk, "follow", () => PlayerFollow.Tick(Player.m_localPlayer));
+            RunGuarded(ref _streamerOk, "terrain", () => _streamer.Update(Link));
+            RunGuarded(ref _creaturesOk, "creatures", () => _creatures.Update(Link));
+            RunGuarded(ref _worldHitsOk, "worldhits", () => _worldHits.Update(Link));
+            RunGuarded(ref _interactOk, "interact", () => { if (!ToolMode.Active) _interactor.Update(); });
             _spawner.Update();
-            Run(ref _lightOk, "light", () => _light.Update(Link));
-            Run(ref _loadoutOk, "loadout", () => _loadout.Update(Link));
-            Run(ref _hudOk, "hud", () => _hud.Update(PlayerFollow.Active && !ToolMode.Active && Player.m_localPlayer != null));
+            RunGuarded(ref _lightOk, "light", () => _light.Update(Link));
+            RunGuarded(ref _loadoutOk, "loadout", () => _loadout.Update(Link));
+            RunGuarded(ref _hudOk, "hud", () => _hudHider.Update(PlayerFollow.Active && !ToolMode.Active && Player.m_localPlayer != null));
             _perf.EndFrame(PlayerFollow.Active);
         }
 

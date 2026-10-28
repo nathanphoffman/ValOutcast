@@ -22,7 +22,7 @@ Layout after the restructure.
 |---|---|
 | `protocol/` | Messages, frame file spec, C/Python connection code, `golden.txt` (exact bytes every implementation must produce). Shared by all games. |
 | `player/outcast/` | `src/` (`vo_bridge`, `vo_field`), `renderer/vo_overlay`, `patches/0001-bridge-hooks.patch` for OpenJK. |
-| `worlds/common/` | C# code any C# world plugin can use: `VoLink.cs`, `FrameReader.cs`. |
+| `worlds/common/` | C# code any C# world plugin can use: `VoLink.cs` (with `link/`), `FrameReader.cs`. |
 | `worlds/valheim/` | Valheim plugin (C#, BepInEx 5 + Harmony). `Plugin.cs` calls each part per frame; a part that throws switches itself off. |
 | `tools/` | Tests, fake games, run scripts. Valheim-only tools are in `tools/worlds/valheim/`. |
 | `third_party/` | Not in git. `OpenJK/` (our modified checkout), `jk2run/` (links to the build and the Steam game files). |
@@ -41,7 +41,7 @@ Valheim plugin parts, controls and Valheim-specific lessons: `docs/worlds/valhei
 - Tests without games: `tools/test_all.sh` (close the real games first, they use the same ports).
 - Fake partner: `tools/start_test_session.sh <options>` / `tools/stop_test_session.sh` (logs in `/tmp/valoutcast_test/`). See `tools/fake_world.py` for options (`--weapon 14` is the cheat, `--power N` presses force power N).
 - Look at the picture: `tools/dump_frame.py out.png`. Look inside Valheim: `dotnet run --project tools/worlds/valheim/valheim_il -- members|calls|il|callers ...`. After a Valheim update run `tools/worlds/valheim/check_valheim_api.sh`.
-- Adding a message touches: `vo_link.h/c`, `vo_protocol.py`, `VoLink.cs`, `tools/make_golden.py` (rerun to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
+- Adding a message touches: the codec files in `protocol/c/codec/`, `protocol/python/vo_codec_*.py`, `worlds/common/link/VoLink.Encode.cs` (plus the matching `vo_link_send`/`Send` function), `tools/make_golden.py` (rerun to rewrite `golden.txt`), the three test files, `PROTOCOL.md`.
 
 ## Controls
 
@@ -103,7 +103,7 @@ All original phases (setup, connection, player sync, terrain collision, creature
 Goal: the player side may change games and the world side will change games; neither should need a rewrite of the shared parts.
 
 1. DONE: `outcast/` is now `player/outcast/`; `valheim/` is now `worlds/valheim/`.
-2. DONE: moved `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/vo_link.c`.
+2. DONE: moved `VoLink.cs` and `FrameReader.cs` (no Valheim types) to `worlds/common/`, shared by C# world plugins. C/C++ worlds use `protocol/c/`.
 3. DONE: Valheim-only tools moved to `tools/worlds/valheim/`; per-game notes to `docs/worlds/valheim.md`.
 4. DONE (Valheim): every world plugin does the same jobs with the same file names: Input, Player, Collision, Combat, Lighting, Overlay, Items. A new game starts as a copy.
 5. DONE (Valheim): per-game numbers live in that world's folder (`Config/Tuning.cs`, `Items/ItemCatalog.cs`). The weapon list belongs to the player side.

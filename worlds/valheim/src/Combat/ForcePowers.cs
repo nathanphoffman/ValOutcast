@@ -13,8 +13,8 @@ namespace ValOutcast
     {
         private class Held
         {
-            public Character Who;
-            public BaseAI Ai;
+            public Character Creature;
+            public BaseAI Controller;
             public Rigidbody Body;
             public bool Gravity;
             public float BaseY;
@@ -24,7 +24,7 @@ namespace ValOutcast
 
         private class Calmed
         {
-            public Character Who;
+            public Character Creature;
             public float Until;
         }
 
@@ -41,94 +41,113 @@ namespace ValOutcast
         private float _nextBlockScan;
 
         /// <summary>Force grip: the creature is lifted and held for as long as grip messages keep coming.</summary>
-        public void Grip(uint id, Character who, float strength, Player player)
+        public void Grip(uint creatureId, Character creature, float strength, Player player)
         {
-            if (who.IsTamed()) return;
-            if (!_held.TryGetValue(id, out Held h))
+            if (creature.IsTamed()) return;
+
+            if (!_held.TryGetValue(creatureId, out Held held))
             {
-                h = new Held { Who = who, Ai = who.GetComponent<BaseAI>(), Body = who.GetComponent<Rigidbody>(), BaseY = who.transform.position.y };
-                if (h.Ai != null) h.Ai.enabled = false;
-                if (h.Body != null) { h.Gravity = h.Body.useGravity; h.Body.useGravity = false; }
-                _held[id] = h;
-                Plugin.LogMessage("force grip on " + who.m_name);
+                held = new Held { Creature = creature, Controller = creature.GetComponent<BaseAI>(), Body = creature.GetComponent<Rigidbody>(), BaseY = creature.transform.position.y };
+
+                if (held.Controller != null) held.Controller.enabled = false;
+
+                if (held.Body != null) { held.Gravity = held.Body.useGravity; held.Body.useGravity = false; }
+                _held[creatureId] = held;
+                Plugin.LogMessage("force grip on " + creature.m_name);
             }
-            h.LastMessage = Time.time;
+
+            held.LastMessage = Time.time;
+
             // From level 2 up the grip hurts.
-            if (strength > 0.5f && Time.time >= h.NextDamage)
+            if (strength > 0.5f && Time.time >= held.NextDamage)
             {
-                h.NextDamage = Time.time + 0.5f;
-                var hit = new HitData();
-                hit.m_damage.m_blunt = Tuning.GripDamagePerSecond * 0.5f * strength;
-                hit.m_point = who.GetCenterPoint();
-                hit.m_dir = Vector3.down;
-                hit.m_attacker = player.GetZDOID();
-                who.Damage(hit);
+                held.NextDamage = Time.time + 0.5f;
+                var hitInfo = new HitData();
+                hitInfo.m_damage.m_blunt = Tuning.GripDamagePerSecond * 0.5f * strength;
+                hitInfo.m_point = creature.GetCenterPoint();
+                hitInfo.m_dir = Vector3.down;
+                hitInfo.m_attacker = player.GetZDOID();
+                creature.Damage(hitInfo);
             }
         }
 
         /// <summary>Force heal: tame creatures in reach get a share of their health back.</summary>
-        public void Heal(Character who, float strength)
+        public void Heal(Character creature, float strength)
         {
-            if (!who.IsTamed()) return;
-            who.Heal(who.GetMaxHealth() * Tuning.HealFraction * strength, true);
+            if (!creature.IsTamed()) return;
+            creature.Heal(creature.GetMaxHealth() * Tuning.HealFraction * strength, true);
         }
 
         /// <summary>The weaker mind tricks: the creature forgets what it was after and stays calm for a while.</summary>
-        public void Calm(uint id, Character who, float strength)
+        public void Calm(uint creatureId, Character creature, float strength)
         {
-            if (who.IsTamed()) return;
+            if (creature.IsTamed()) return;
             float seconds = strength < 0.5f ? Tuning.CalmSecondsLevel1 : Tuning.CalmSecondsLevel2;
-            _calmed[id] = new Calmed { Who = who, Until = Time.time + seconds };
-            Plugin.LogMessage("mind trick: " + who.m_name + " loses interest for " + seconds.ToString("0") + " s");
+            _calmed[creatureId] = new Calmed { Creature = creature, Until = Time.time + seconds };
+            Plugin.LogMessage("mind trick: " + creature.m_name + " loses interest for " + seconds.ToString("0") + " s");
         }
 
         public void Release()
         {
-            foreach (Held h in _held.Values) Free(h);
+            foreach (Held held in _held.Values) Free(held);
             _held.Clear();
             _calmed.Clear();
             _deflected.Clear();
         }
 
-        private static void Free(Held h)
+        // Hand control of a released creature back to the game: re-enable its AI and gravity.
+        private static void Free(Held held)
         {
-            if (h.Who == null) return;
-            if (h.Ai != null) h.Ai.enabled = true;
-            if (h.Body != null) { h.Body.useGravity = h.Gravity; h.Body.velocity = Vector3.zero; }
+            if (held.Creature == null) return;
+
+            if (held.Controller != null) held.Controller.enabled = true;
+
+            if (held.Body != null) { held.Body.useGravity = held.Gravity; held.Body.velocity = Vector3.zero; }
         }
 
+        // Each frame, lift every gripped creature, and release any that died or stopped receiving grip messages.
         public void Update(VoLink link, Player player)
         {
             var done = new List<uint>();
+
             foreach (KeyValuePair<uint, Held> pair in _held)
             {
-                Held h = pair.Value;
-                if (h.Who == null || h.Who.IsDead() || Time.time - h.LastMessage > 0.3f)
+                Held held = pair.Value;
+
+                if (held.Creature == null || held.Creature.IsDead() || Time.time - held.LastMessage > 0.3f)
                 {
-                    Free(h);
+                    Free(held);
                     done.Add(pair.Key);
+
                     continue;
                 }
-                Vector3 pos = h.Who.transform.position;
-                pos.y = Mathf.MoveTowards(pos.y, h.BaseY + Tuning.GripLiftMeters, Tuning.GripLiftSpeed * Time.deltaTime);
-                h.Who.SetMoveDir(Vector3.zero);
-                if (h.Body != null) { h.Body.velocity = Vector3.zero; h.Body.position = pos; }
-                h.Who.transform.position = pos;
+
+                Vector3 position = held.Creature.transform.position;
+                position.y = Mathf.MoveTowards(position.y, held.BaseY + Tuning.GripLiftMeters, Tuning.GripLiftSpeed * Time.deltaTime);
+                held.Creature.SetMoveDir(Vector3.zero);
+
+                if (held.Body != null) { held.Body.velocity = Vector3.zero; held.Body.position = position; }
+                held.Creature.transform.position = position;
             }
-            foreach (uint id in done) _held.Remove(id);
+
+            foreach (uint creatureId in done) _held.Remove(creatureId);
 
             done.Clear();
+
             foreach (KeyValuePair<uint, Calmed> pair in _calmed)
             {
-                Calmed c = pair.Value;
-                if (c.Who == null || c.Who.IsDead() || Time.time > c.Until) { done.Add(pair.Key); continue; }
-                var ai = c.Who.GetComponent<MonsterAI>();
-                if (ai == null) continue;
-                TargetCreature(ai) = null;
-                TargetStatic(ai) = null;
-                SetAlerted.Invoke(ai, new object[] { false });
+                Calmed charmed = pair.Value;
+
+                if (charmed.Creature == null || charmed.Creature.IsDead() || Time.time > charmed.Until) { done.Add(pair.Key); continue; }
+                var monsterAi = charmed.Creature.GetComponent<MonsterAI>();
+
+                if (monsterAi == null) continue;
+                TargetCreature(monsterAi) = null;
+                TargetStatic(monsterAi) = null;
+                SetAlerted.Invoke(monsterAi, new object[] { false });
             }
-            foreach (uint id in done) _calmed.Remove(id);
+
+            foreach (uint creatureId in done) _calmed.Remove(creatureId);
 
             DeflectProjectiles(link, player);
         }
@@ -138,27 +157,33 @@ namespace ValOutcast
         {
             if (Time.time < _nextBlockScan) return;
             _nextBlockScan = Time.time + 0.05f;
+
             if (!link.PlayerLightFresh || link.PlayerLight.Intensity <= 0f || ToolMode.Active) return;
 
-            Vector3 eye = player.transform.position + Vector3.up * 1.4f;
+            Vector3 eyePoint = player.transform.position + Vector3.up * 1.4f;
             Vector3 look = player.GetLookDir();
             float radius = Tuning.SaberBlockRadius;
-            foreach (Projectile p in Object.FindObjectsOfType<Projectile>())
-            {
-                if (p == null || _deflected.Contains(p.GetInstanceID())) continue;
-                Character owner = ProjectileOwner(p);
-                if (owner == player) continue;
-                Vector3 toProjectile = p.transform.position - eye;
-                if (toProjectile.sqrMagnitude > radius * radius || Vector3.Dot(toProjectile.normalized, look) < 0.2f) continue;
-                Vector3 vel = ProjectileVelocity(p);
-                if (vel.sqrMagnitude < 1f || Vector3.Dot(vel.normalized, -toProjectile.normalized) < 0.5f) continue;   // not coming at the player
 
-                Vector3 back = owner != null ? (owner.GetCenterPoint() - p.transform.position).normalized : -vel.normalized;
-                ProjectileVelocity(p) = back * vel.magnitude;
-                ProjectileOwner(p) = player;   // now it is the player's shot, so it hurts the creatures it hits
-                _deflected.Add(p.GetInstanceID());
+            foreach (Projectile projectile in Object.FindObjectsOfType<Projectile>())
+            {
+                if (projectile == null || _deflected.Contains(projectile.GetInstanceID())) continue;
+                Character owner = ProjectileOwner(projectile);
+
+                if (owner == player) continue;
+                Vector3 toProjectile = projectile.transform.position - eyePoint;
+
+                if (toProjectile.sqrMagnitude > radius * radius || Vector3.Dot(toProjectile.normalized, look) < 0.2f) continue;
+                Vector3 velocity = ProjectileVelocity(projectile);
+
+                if (velocity.sqrMagnitude < 1f || Vector3.Dot(velocity.normalized, -toProjectile.normalized) < 0.5f) continue;   // not coming at the player
+
+                Vector3 back = owner != null ? (owner.GetCenterPoint() - projectile.transform.position).normalized : -velocity.normalized;
+                ProjectileVelocity(projectile) = back * velocity.magnitude;
+                ProjectileOwner(projectile) = player;   // now it is the player's shot, so it hurts the creatures it hits
+                _deflected.Add(projectile.GetInstanceID());
                 Plugin.LogMessage("saber deflected a projectile");
             }
+
             if (_deflected.Count > 200) _deflected.Clear();
         }
     }

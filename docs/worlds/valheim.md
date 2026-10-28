@@ -19,7 +19,7 @@ Grouped by job, so another world plugin can use the same folder names. All code 
 | `Config/` | `Tuning` (Valheim-specific numbers: damage scale, creature range, tool tier, grace time) |
 | `Debug/` | `PerfStats`, `TestSpawner` (F8 boar) |
 
-Shared connection code (`VoLink.cs`, `FrameReader.cs`) is in `worlds/common/`.
+Shared connection code (`VoLink.cs`, `link/`, `FrameReader.cs`) is in `worlds/common/`.
 
 ## Build and tools
 

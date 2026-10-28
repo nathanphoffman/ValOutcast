@@ -20,20 +20,24 @@ namespace ValOutcast
             if (link == null || !link.PlayerLightFresh || link.PlayerLight.Intensity <= 0f || ToolMode.Active)
             {
                 Clear();
+
                 return;
             }
+
             if (_light == null)
             {
-                var go = new GameObject("ValOutcast saber glow");
-                _light = go.AddComponent<Light>();
+                var gameObject = new GameObject("ValOutcast saber glow");
+                _light = gameObject.AddComponent<Light>();
                 _light.type = LightType.Point;
                 _light.shadows = LightShadows.None;
                 _light.range = Range;
             }
-            var msg = link.PlayerLight;
-            _light.color = new Color(msg.R, msg.G, msg.B);
+
+            var message = link.PlayerLight;
+            _light.color = new Color(message.Red, message.Green, message.Blue);
+
             // A slow, gentle pulse (about 1.6 times a second, 4% deep) so it feels alive without flickering.
-            _light.intensity = BaseIntensity * msg.Intensity * (0.96f + 0.04f * Mathf.Sin(Time.time * 10f));
+            _light.intensity = BaseIntensity * message.Intensity * (0.96f + 0.04f * Mathf.Sin(Time.time * 10f));
             _light.transform.position = camera.position + camera.rotation * Offset;
             _light.enabled = true;
         }

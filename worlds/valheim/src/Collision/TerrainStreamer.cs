@@ -46,33 +46,39 @@ namespace ValOutcast
 
         public TerrainStreamer()
         {
-            for (int dz = -Radius; dz <= Radius; dz++)
-                for (int dx = -Radius; dx <= Radius; dx++)
-                    _offsets.Add(new Vector2Int(dx, dz));
-            _offsets.Sort((a, b) => (a.x * a.x + a.y * a.y).CompareTo(b.x * b.x + b.y * b.y));
+            for (int offsetZ = -Radius; offsetZ <= Radius; offsetZ++)
+
+                for (int offsetX = -Radius; offsetX <= Radius; offsetX++)
+                    _offsets.Add(new Vector2Int(offsetX, offsetZ));
+            _offsets.Sort((first, second) => (first.x * first.x + first.y * first.y).CompareTo(second.x * second.x + second.y * second.y));
         }
 
-        private static long Key(int cx, int cz)
+        private static long ChunkKey(int chunkX, int chunkZ)
         {
-            return ((long)cx << 32) | (uint)cz;
+            // Pack the two chunk coordinates into one long key: x in the high 32 bits, z in the low 32.
+            return ((long)chunkX << 32) | (uint)chunkZ;
         }
 
         public void Update(VoLink link)
         {
             if (link == null) return;
             bool connected = link.Connected;
+
             if (connected && !_wasConnected)
             {
                 _chunks.Clear(); // the player side may have restarted and knows nothing
                 _working = false;
             }
+
             _wasConnected = connected;
 
             Player player = Player.m_localPlayer;
+
             if (!connected || !PlayerFollow.Active || !PlayerFollow.Anchored || player == null || ZoneSystem.instance == null)
             {
                 return;
             }
+
             if (_generation != PlayerFollow.AnchorGeneration)
             {
                 _generation = PlayerFollow.AnchorGeneration;
@@ -82,53 +88,64 @@ namespace ValOutcast
             }
 
             Vector3 wire = PlayerFollow.WorldToWire(player.transform.position);
-            int pcx = Mathf.FloorToInt(wire.x / (VoLink.ChunkCells * VoLink.CellSizeM));
-            int pcz = Mathf.FloorToInt(wire.z / (VoLink.ChunkCells * VoLink.CellSizeM));
+            int playerChunkX = Mathf.FloorToInt(wire.x / (VoLink.ChunkCells * VoLink.CellSizeM));
+            int playerChunkZ = Mathf.FloorToInt(wire.z / (VoLink.ChunkCells * VoLink.CellSizeM));
 
             _clock.Restart();
+
             while (_clock.Elapsed.TotalMilliseconds < BudgetMs)
             {
-                if (!_working && !StartNextChunk(pcx, pcz)) break;
+                if (!_working && !StartNextChunk(playerChunkX, playerChunkZ)) break;
+
                 if (_working) Measure(link);
             }
 
-            ForgetFarChunks(pcx, pcz);
+            ForgetFarChunks(playerChunkX, playerChunkZ);
         }
 
         /// <summary>Picks what to measure next: the nearest chunk never measured, else the oldest one now and then.</summary>
-        private bool StartNextChunk(int pcx, int pcz)
+        private bool StartNextChunk(int playerChunkX, int playerChunkZ)
         {
-            foreach (Vector2Int o in _offsets)
+            foreach (Vector2Int offset in _offsets)
             {
-                int cx = pcx + o.x, cz = pcz + o.y;
-                if (_chunks.ContainsKey(Key(cx, cz))) continue;
-                Begin(cx, cz, true);
+                int chunkX = playerChunkX + offset.x, chunkZ = playerChunkZ + offset.y;
+
+                if (_chunks.ContainsKey(ChunkKey(chunkX, chunkZ))) continue;
+                Begin(chunkX, chunkZ, true);
+
                 return true;
             }
 
-            float now = Time.realtimeSinceStartup;
-            if (now < _nextRefresh) return false;
-            _nextRefresh = now + RefreshEverySeconds;
+            float currentSeconds = Time.realtimeSinceStartup;
+
+            if (currentSeconds < _nextRefresh) return false;
+            _nextRefresh = currentSeconds + RefreshEverySeconds;
 
             long oldestKey = 0;
             float oldest = float.MaxValue;
-            foreach (var kv in _chunks)
+
+            foreach (var entry in _chunks)
             {
-                if (kv.Value.LastSample < oldest) { oldest = kv.Value.LastSample; oldestKey = kv.Key; }
+                if (entry.Value.LastSample < oldest) { oldest = entry.Value.LastSample; oldestKey = entry.Key; }
             }
+
             if (oldest == float.MaxValue) return false;
+
+            // Unpack the key: high 32 bits are x, low 32 bits are z.
             Begin((int)(oldestKey >> 32), (int)(uint)(oldestKey & 0xFFFFFFFF), false);
+
             return true;
         }
 
-        private void Begin(int cx, int cz, bool isNew)
+        private void Begin(int chunkX, int chunkZ, bool isNew)
         {
             _working = true;
-            _workCx = cx;
-            _workCz = cz;
+            _workCx = chunkX;
+            _workCz = chunkZ;
             _workCell = 0;
             _workHash = 17;
             _workIsNew = isNew;
+
             if (_objectMask < 0)
             {
                 _objectMask = BuildObjectMask();
@@ -144,24 +161,33 @@ namespace ValOutcast
             int character = LayerMask.NameToLayer("character");
             int mask = 0;
             var names = new List<string>();
+
             if (character >= 0)
             {
                 for (int layer = 0; layer < 32; layer++)
                 {
                     string name = LayerMask.LayerToName(layer);
+
                     if (string.IsNullOrEmpty(name)) continue;
+
                     if (name.StartsWith("character") || name == "terrain" || name == "Water" || name == "WaterVolume" || name == "UI" || name == "ghost") continue;
+
                     if (Physics.GetIgnoreLayerCollision(character, layer)) continue;
+
+                    // Set the bit for this layer in the layer mask.
                     mask |= 1 << layer;
                     names.Add(name);
                 }
             }
+
             if (mask == 0)
             {
                 mask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece");
                 names.Add("(fixed list)");
             }
+
             Plugin.LogMessage("terrain: objects that block the player are on layers " + string.Join(", ", names));
+
             return mask;
         }
 
@@ -169,75 +195,91 @@ namespace ValOutcast
         private void Measure(VoLink link)
         {
             int cells = VoLink.ChunkCells * VoLink.ChunkCells;
+
             while (_workCell < cells)
             {
                 if (_clock.Elapsed.TotalMilliseconds >= BudgetMs) return;
 
-                int ix = _workCell % VoLink.ChunkCells;
-                int iz = _workCell / VoLink.ChunkCells;
-                float wireX = (_workCx * VoLink.ChunkCells + ix + 0.5f) * VoLink.CellSizeM;
-                float wireZ = (_workCz * VoLink.ChunkCells + iz + 0.5f) * VoLink.CellSizeM;
-                Vector3 w = PlayerFollow.WireToWorldXZ(wireX, wireZ);
+                int cellX = _workCell % VoLink.ChunkCells;
+                int cellZ = _workCell / VoLink.ChunkCells;
+                float wireX = (_workCx * VoLink.ChunkCells + cellX + 0.5f) * VoLink.CellSizeM;
+                float wireZ = (_workCz * VoLink.ChunkCells + cellZ + 0.5f) * VoLink.CellSizeM;
+                Vector3 worldPosition = PlayerFollow.WireToWorldXZ(wireX, wireZ);
 
-                short h = VoLink.NoHeight;
-                if (ZoneSystem.instance.GetGroundHeight(w, out float ground))
+                short height = VoLink.NoHeight;
+
+                if (ZoneSystem.instance.GetGroundHeight(worldPosition, out float ground))
                 {
-                    float top = ground;
+                    float surfaceTop = ground;
+
                     // Something solid standing on the ground (tree, rock, wall)? Then the column is as tall as it really is.
                     // (Measured from 30 m above the ground, so a roof higher than that is ignored.)
-                    var from = new Vector3(w.x, ground + ObjectSearchHeight, w.z);
+                    var from = new Vector3(worldPosition.x, ground + ObjectSearchHeight, worldPosition.z);
+
                     if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, ObjectSearchHeight, _objectMask, QueryTriggerInteraction.Ignore)
                         && hit.point.y > ground + MinObjectHeight)
                     {
                         // Low things are stepped onto. Taller ones only count if something solid is at body height here.
-                        bool low = hit.point.y <= ground + StepHeight;
-                        if (low || SolidAtBodyHeight(w, ground)) top = hit.point.y;
+                        bool isLow = hit.point.y <= ground + StepHeight;
+
+                        if (isLow || SolidAtBodyHeight(worldPosition, ground)) surfaceTop = hit.point.y;
                     }
-                    float wireY = PlayerFollow.WorldYToWireY(top);
-                    h = (short)Mathf.Clamp(Mathf.RoundToInt(wireY * VoLink.HeightUnitsPerM), -32767, 32767);
+
+                    float wireY = PlayerFollow.WorldYToWireY(surfaceTop);
+                    height = (short)Mathf.Clamp(Mathf.RoundToInt(wireY * VoLink.HeightUnitsPerM), -32767, 32767);
                 }
-                _heights[_workCell] = h;
-                _workHash = _workHash * 31 + h;
+
+                _heights[_workCell] = height;
+                _workHash = _workHash * 31 + height;
                 _workCell++;
             }
 
             // Chunk finished.
-            long key = Key(_workCx, _workCz);
-            float now = Time.realtimeSinceStartup;
-            if (!_chunks.TryGetValue(key, out Sent sent))
+            long chunkKey = ChunkKey(_workCx, _workCz);
+            float currentSeconds = Time.realtimeSinceStartup;
+
+            if (!_chunks.TryGetValue(chunkKey, out Sent sent))
             {
                 sent = new Sent { LastSent = -1000f };
-                _chunks[key] = sent;
+                _chunks[chunkKey] = sent;
             }
-            sent.LastSample = now;
-            if (_workIsNew || _workHash != sent.Hash || now - sent.LastSent > ResendSeconds)
+
+            sent.LastSample = currentSeconds;
+
+            if (_workIsNew || _workHash != sent.Hash || currentSeconds - sent.LastSent > ResendSeconds)
             {
                 link.SendCollisionSection(_workCx, _workCz, _heights);
-                sent.LastSent = now;
+                sent.LastSent = currentSeconds;
                 sent.Hash = _workHash;
             }
+
             _working = false;
         }
 
-        private bool SolidAtBodyHeight(Vector3 w, float ground)
+        private bool SolidAtBodyHeight(Vector3 worldPosition, float ground)
         {
             float half = (BodyHigh - BodyLow) * 0.5f;
-            var center = new Vector3(w.x, ground + BodyLow + half, w.z);
+            var center = new Vector3(worldPosition.x, ground + BodyLow + half, worldPosition.z);
+
             return Physics.CheckBox(center, new Vector3(CheckHalfWidth, half, CheckHalfWidth), Quaternion.identity, _objectMask, QueryTriggerInteraction.Ignore);
         }
 
-        private void ForgetFarChunks(int pcx, int pcz)
+        private void ForgetFarChunks(int playerChunkX, int playerChunkZ)
         {
-            List<long> far = null;
-            foreach (long key in _chunks.Keys)
+            List<long> farChunks = null;
+
+            foreach (long chunkKey in _chunks.Keys)
             {
-                int cx = (int)(key >> 32), cz = (int)(uint)(key & 0xFFFFFFFF);
-                if (Mathf.Abs(cx - pcx) > Radius + 2 || Mathf.Abs(cz - pcz) > Radius + 2)
+                // Unpack the key: high 32 bits are x, low 32 bits are z.
+                int chunkX = (int)(chunkKey >> 32), chunkZ = (int)(uint)(chunkKey & 0xFFFFFFFF);
+
+                if (Mathf.Abs(chunkX - playerChunkX) > Radius + 2 || Mathf.Abs(chunkZ - playerChunkZ) > Radius + 2)
                 {
-                    (far ?? (far = new List<long>())).Add(key);
+                    (farChunks ?? (farChunks = new List<long>())).Add(chunkKey);
                 }
             }
-            if (far != null) foreach (long key in far) _chunks.Remove(key);
+
+            if (farChunks != null) foreach (long chunkKey in farChunks) _chunks.Remove(chunkKey);
         }
     }
 }
